@@ -189,18 +189,14 @@ export async function renderMyDay(container, tasks, currentUser, ctx) {
         </div>
       ` : ''}
 
-      ${isOwnDay ? `
       <div class="myday-add-spacer"></div>
-      ` : ''}
     </div>
 
-    ${isOwnDay ? `
     <div class="myday-add-bar">
       <div class="myday-add-wrap">
         <input class="myday-add-input" id="myday-add-input" placeholder="+ Add task (@ to tag)" type="text">
       </div>
     </div>
-    ` : ''}
   `
 
   bindMyDayActions(container, tasks, currentUser, ctx, now, isOwnDay)

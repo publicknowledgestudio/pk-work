@@ -47,11 +47,21 @@ export function attachMention(input, { projects = [], clients = [] } = {}) {
     dropdown = document.createElement('div')
     dropdown.className = 'mention-dropdown'
 
-    // Position relative to the input
+    // Position relative to the input — open upward if near bottom of viewport
     const rect = input.getBoundingClientRect()
+    const spaceBelow = window.innerHeight - rect.bottom
+    const openUpward = spaceBelow < 200
+
     dropdown.style.left = rect.left + 'px'
-    dropdown.style.top = (rect.bottom + 4) + 'px'
     dropdown.style.minWidth = Math.min(rect.width, 260) + 'px'
+
+    if (openUpward) {
+      dropdown.style.bottom = (window.innerHeight - rect.top + 4) + 'px'
+      dropdown.style.top = 'auto'
+    } else {
+      dropdown.style.top = (rect.bottom + 4) + 'px'
+      dropdown.style.bottom = 'auto'
+    }
 
     items.forEach((item, i) => {
       const opt = document.createElement('div')
@@ -210,6 +220,21 @@ export function attachMention(input, { projects = [], clients = [] } = {}) {
   }
 
   function onKeydown(e) {
+    // Backspace on empty input removes the last chip
+    if (e.key === 'Backspace' && !input.value && !dropdown) {
+      if (tags.projectId) {
+        tags.projectId = ''
+        tags.projectName = ''
+        renderChips()
+        return
+      }
+      if (tags.assignees.length > 0) {
+        tags.assignees.pop()
+        renderChips()
+        return
+      }
+    }
+
     if (!dropdown) return
 
     const items = dropdown.querySelectorAll('.mention-option')

@@ -206,7 +206,23 @@ async function listTasks(req, res) {
   if (req.query.clientId) q = q.where('clientId', '==', req.query.clientId)
   if (req.query.projectId) q = q.where('projectId', '==', req.query.projectId)
 
-  const snap = await q.orderBy('updatedAt', 'desc').get()
+  // Date range filters on closedAt (ISO date strings, e.g. "2026-02-24")
+  const hasClosedAtFilter = req.query.closedAfter || req.query.closedBefore
+  if (req.query.closedAfter) {
+    q = q.where('closedAt', '>=', admin.firestore.Timestamp.fromDate(new Date(req.query.closedAfter)))
+  }
+  if (req.query.closedBefore) {
+    q = q.where('closedAt', '<', admin.firestore.Timestamp.fromDate(new Date(req.query.closedBefore)))
+  }
+
+  // Firestore requires orderBy on the range-filtered field first
+  if (hasClosedAtFilter) {
+    q = q.orderBy('closedAt', 'desc')
+  } else {
+    q = q.orderBy('updatedAt', 'desc')
+  }
+
+  const snap = await q.get()
   const tasks = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
   res.json({ tasks })
 }

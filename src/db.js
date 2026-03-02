@@ -207,8 +207,14 @@ export async function updateTask(db, taskId, data) {
   const update = { ...data, updatedAt: serverTimestamp() }
 
   // Set closedAt when moving to done
-  if (data.status === 'done' && !data.closedAt) {
-    update.closedAt = serverTimestamp()
+  if (data.status === 'done') {
+    if (data.closedAt && typeof data.closedAt === 'string') {
+      // User provided a specific date — convert to Timestamp
+      update.closedAt = Timestamp.fromDate(new Date(data.closedAt + 'T23:59:59'))
+    } else if (!data.closedAt) {
+      // No date provided — auto-set to now
+      update.closedAt = serverTimestamp()
+    }
   }
   // Clear closedAt when reopening
   if (data.status && data.status !== 'done') {

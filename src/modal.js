@@ -49,15 +49,24 @@ saveBtn.addEventListener('click', async () => {
     return
   }
 
+  const status = document.getElementById('task-status').value
   const data = {
     title,
     description: document.getElementById('task-description').value.trim(),
     clientId: selectedClientId,
     projectId: selectedProjectId,
     assignees: [...selectedAssignees],
-    status: document.getElementById('task-status').value,
+    status,
     priority: document.getElementById('task-priority').value,
     deadline: document.getElementById('task-deadline').value || null,
+  }
+
+  // Include user-provided closedAt when status is done
+  if (status === 'done') {
+    const closedAtVal = document.getElementById('task-closed-at').value
+    if (closedAtVal) {
+      data.closedAt = closedAtVal
+    }
   }
 
   // Handle new note
@@ -108,6 +117,7 @@ statusPillsEl.addEventListener('click', (e) => {
   statusHiddenEl.value = status
   statusPillsEl.querySelectorAll('.status-pill').forEach((p) => p.classList.remove('active'))
   pill.classList.add('active')
+  updateClosedAtVisibility(status)
 })
 
 function setStatusPill(status) {
@@ -115,6 +125,21 @@ function setStatusPill(status) {
   statusPillsEl.querySelectorAll('.status-pill').forEach((p) => {
     p.classList.toggle('active', p.dataset.status === status)
   })
+  updateClosedAtVisibility(status)
+}
+
+function updateClosedAtVisibility(status) {
+  const row = document.getElementById('task-closed-at-row')
+  const input = document.getElementById('task-closed-at')
+  if (status === 'done') {
+    row.classList.remove('hidden')
+    // Auto-fill with today if empty (user just marked as done)
+    if (!input.value) {
+      input.value = new Date().toISOString().split('T')[0]
+    }
+  } else {
+    row.classList.add('hidden')
+  }
 }
 
 // ===== Project Picker =====
@@ -286,6 +311,7 @@ export function openModal(task, ctx) {
   setStatusPill(task?.status || ctx.defaultStatus || 'todo')
   document.getElementById('task-priority').value = task?.priority || 'medium'
   document.getElementById('task-deadline').value = formatDateInput(task?.deadline)
+  document.getElementById('task-closed-at').value = formatDateInput(task?.closedAt)
   document.getElementById('task-notes').value = ''
 
   // Render existing notes
