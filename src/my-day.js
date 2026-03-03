@@ -32,10 +32,10 @@ export async function renderMyDay(container, tasks, currentUser, ctx) {
   const tomorrowData = await loadDailyFocus(ctx.db, targetEmail, tomorrowStr)
   tomorrowTaskIds = tomorrowData.taskIds
 
-  // Filter out stale IDs (tasks that no longer exist or are already done)
+  // Filter out stale IDs (tasks that no longer exist) — keep done tasks so they persist on the calendar
   const validFocusIds = focusTaskIds.filter((id) => {
     const t = tasks.find((task) => task.id === id)
-    return t && t.status !== 'done'
+    return !!t
   })
   if (validFocusIds.length !== focusTaskIds.length && isOwnDay) {
     focusTaskIds = validFocusIds
@@ -49,7 +49,7 @@ export async function renderMyDay(container, tasks, currentUser, ctx) {
     .map((id) => tasks.find((t) => t.id === id))
     .filter(Boolean)
 
-  // Filter stale tomorrow IDs
+  // Filter stale tomorrow IDs — remove done tasks from tomorrow (already completed)
   const validTomorrowIds = tomorrowTaskIds.filter((id) => {
     const t = tasks.find((task) => task.id === id)
     return t && t.status !== 'done'
@@ -453,12 +453,17 @@ function bindMyDayActions(container, tasks, currentUser, ctx, now, isOwnDay) {
         addInput.disabled = true
         // Merge targetEmail with any @-mentioned people
         const assignees = [targetEmail, ...mentionTags.assignees.filter((a) => a !== targetEmail)]
+        const projectId = mentionTags.projectId || ''
+        // Auto-resolve client from project (every project belongs to exactly one client)
+        const clientId = projectId
+          ? (ctx.projects.find((p) => p.id === projectId)?.clientId || '')
+          : ''
         const ref = await createTask(ctx.db, {
           title,
           status: 'todo',
           assignees,
-          clientId: '',
-          projectId: mentionTags.projectId || '',
+          clientId,
+          projectId,
           createdBy: myEmail || '',
         })
         // Add new task to today's focus (unscheduled — no time block)

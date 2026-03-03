@@ -92,9 +92,9 @@ export function renderTimeGrid({
     slotsHtml += `<div class="tg-slot" data-slot="${i}" style="top:${i * SLOT_H}px;height:${SLOT_H}px"></div>`
   }
 
-  // Unscheduled focus tasks (in taskIds but not in timeBlocks)
+  // Unscheduled focus tasks (in taskIds but not in timeBlocks, excluding done tasks)
   const scheduledIds = new Set(timeBlocks.map((b) => b.taskId))
-  const unscheduled = focusTasks.filter((t) => !scheduledIds.has(t.id))
+  const unscheduled = focusTasks.filter((t) => !scheduledIds.has(t.id) && t.status !== 'done')
   const unschedHtml =
     unscheduled.length > 0
       ? `<div class="tg-unscheduled">
@@ -146,8 +146,10 @@ function renderTaskBlock(block, task, ctx, isOwnDay) {
   const urgentIcon = task.priority === 'urgent' ? '<i class="ph-fill ph-warning urgent-icon"></i>' : ''
   const highIcon = task.priority === 'high' ? '<i class="ph-fill ph-arrow-fat-up" style="color:#f59e0b;font-size:13px"></i>' : ''
 
+  const doneClass = task.status === 'done' ? ' done' : ''
+
   return `
-    <div class="time-block task-block${compact ? ' compact' : ''}" data-task-id="${task.id}"
+    <div class="time-block task-block${compact ? ' compact' : ''}${doneClass}" data-task-id="${task.id}"
          style="top:${top}px;height:${height}px" title="${esc(task.title)}">
       <div class="tb-main" data-task-id="${task.id}">
         ${statusHtml}

@@ -2981,6 +2981,22 @@ body {
   cursor: grabbing;
 }
 
+/* Completed task block on time grid — subtle green accent, faded */
+.task-block.done {
+  background: rgba(34, 197, 94, 0.06);
+  border-left-color: #22c55e;
+  opacity: 0.65;
+}
+
+.task-block.done .tb-title {
+  text-decoration: line-through;
+  color: var(--text-tertiary);
+}
+
+.task-block.done:hover {
+  opacity: 0.85;
+}
+
 /* Calendar event block — indigo accent, read-only */
 .cal-block {
   background: rgba(99, 102, 241, 0.1);
