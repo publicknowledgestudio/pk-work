@@ -4650,3 +4650,43 @@ body {
   .references-toolbar { flex-wrap: wrap; }
   .references-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
 }
+
+/* Client header */
+.header-logo-client {
+  font-weight: 400;
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-left: 4px;
+}
+
+/* Client board header */
+.client-board-view .client-board-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 0 8px;
+}
+
+.client-board-view .client-board-header h2 {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.client-project-filter {
+  min-width: 160px;
+}
+
+/* Client timesheet status badges */
+.ts-status {
+  font-size: 11px;
+  text-transform: capitalize;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--bg-secondary);
+  white-space: nowrap;
+}
+.ts-status-done { background: rgba(34,197,94,0.1); color: #16a34a; }
+.ts-status-in_progress { background: rgba(245,158,11,0.1); color: #d97706; }
+.ts-status-review { background: rgba(139,92,246,0.1); color: #7c3aed; }
+.ts-status-todo { background: rgba(59,130,246,0.1); color: #2563eb; }
+.ts-status-backlog { background: rgba(107,114,128,0.1); color: #6b7280; }
