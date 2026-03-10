@@ -8,7 +8,7 @@ import {
 } from 'firebase/auth'
 import { getFirestore } from 'firebase/firestore'
 import { firebaseConfig, TEAM, STATUSES } from './config.js'
-import { loadClients, loadProjects, loadPeople, subscribeToTasks, saveUserProfile, loadUserProfiles, updateTask } from './db.js'
+import { loadClients, loadProjects, loadPeople, subscribeToTasks, saveUserProfile, loadUserProfiles, updateTask, loadClientUser, subscribeToTasksByClient } from './db.js'
 import { renderBoard, renderBoardByAssignee, renderBoardByClient, renderBoardByProject } from './board.js'
 import { renderMyTasks } from './my-tasks.js'
 import { renderMyDay } from './my-day.js'
@@ -21,6 +21,8 @@ import { renderTimesheets } from './timesheets.js'
 import { openModal } from './modal.js'
 import { initContextMenu } from './context-menu.js'
 import { setAccessToken, clearAccessToken } from './calendar.js'
+import { renderClientBoard } from './client-board.js'
+import { renderClientTimesheets } from './client-timesheets.js'
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig)
@@ -32,6 +34,9 @@ let currentUser = null
 let currentView = 'my-day'
 let currentBoardView = 'status'
 let allTasks = []
+let userRole = null       // 'team' | 'client' | null
+let userClientId = null   // only set for client users
+let userClientName = null // client org name
 let clients = []
 let projects = []
 let people = []
@@ -52,12 +57,15 @@ const ROUTES = {
   '/wiki':          { view: 'wiki' },
   '/references':    { view: 'references' },
   '/manage':        { view: 'clients' },
+  '/client-board':      { view: 'client-board' },
+  '/client-timesheets': { view: 'client-timesheets' },
 }
 
 const VIEW_TO_PATH = {
   'my-day': '/my-day', 'my-tasks': '/my-tasks', 'standup': '/standup',
   'timesheets': '/timesheets', 'people': '/people', 'wiki': '/wiki',
   'references': '/references', 'clients': '/manage',
+  'client-board': '/client-board', 'client-timesheets': '/client-timesheets',
 }
 const BOARD_TO_PATH = {
   'status': '/board/backlog', 'assignee': '/board/team',
@@ -79,8 +87,8 @@ function handleRouteChange() {
     currentView = route.view
     if (route.boardView) currentBoardView = route.boardView
   } else {
-    currentView = 'my-day'
-    history.replaceState(null, '', '#/my-day')
+    currentView = userRole === 'client' ? 'client-board' : 'my-day'
+    history.replaceState(null, '', userRole === 'client' ? '#/client-board' : '#/my-day')
   }
 
   // Sync nav-tab active state
@@ -203,7 +211,7 @@ function showStatusToast(title, statusLabel, taskId, previousStatus) {
 
 // Auth
 const provider = new GoogleAuthProvider()
-provider.setCustomParameters({ hd: 'publicknowledge.co' })
+provider.setCustomParameters({ prompt: 'select_account' })
 provider.addScope('https://www.googleapis.com/auth/calendar.events.readonly')
 
 loginBtn.addEventListener('click', async () => {
@@ -246,6 +254,28 @@ export async function reconnectCalendar() {
 onAuthStateChanged(auth, async (user) => {
   if (user) {
     currentUser = user
+
+    // Detect user role
+    if (user.email.endsWith('@publicknowledge.co')) {
+      userRole = 'team'
+      userClientId = null
+      userClientName = null
+    } else {
+      // Check clientUsers allowlist
+      const clientUserDoc = await loadClientUser(db, user.email)
+      if (clientUserDoc) {
+        userRole = 'client'
+        userClientId = clientUserDoc.clientId
+      } else {
+        // Not authorized — sign out
+        userRole = null
+        const loginNote = document.querySelector('.login-note')
+        if (loginNote) loginNote.textContent = 'Access denied. Contact your project manager for an invitation.'
+        await signOut(auth)
+        return
+      }
+    }
+
     loginScreen.classList.add('hidden')
     appShell.classList.remove('hidden')
 
@@ -256,11 +286,13 @@ onAuthStateChanged(auth, async (user) => {
       userAvatar.style.background = 'none'
       // Store photoURL on the TEAM member for use in board/standup
       if (member) member.photoURL = user.photoURL
-      // Persist photo to Firestore so other users can see it
-      saveUserProfile(db, user.email, {
-        photoURL: user.photoURL,
-        displayName: user.displayName || '',
-      })
+      // Persist photo to Firestore so other users can see it (team only)
+      if (userRole === 'team') {
+        saveUserProfile(db, user.email, {
+          photoURL: user.photoURL,
+          displayName: user.displayName || '',
+        })
+      }
     } else {
       const initial = (user.displayName || user.email)[0].toUpperCase()
       userAvatar.textContent = initial
@@ -268,29 +300,74 @@ onAuthStateChanged(auth, async (user) => {
     }
 
     // Load all user profiles and apply photos to TEAM members
-    const profiles = await loadUserProfiles(db)
-    TEAM.forEach((m) => {
-      if (profiles[m.email]?.photoURL) {
-        m.photoURL = profiles[m.email].photoURL
-      }
-    })
+    if (userRole === 'team') {
+      const profiles = await loadUserProfiles(db)
+      TEAM.forEach((m) => {
+        if (profiles[m.email]?.photoURL) {
+          m.photoURL = profiles[m.email].photoURL
+        }
+      })
+    }
 
     // Load reference data
     clients = await loadClients(db)
     projects = await loadProjects(db)
-    people = await loadPeople(db)
+    if (userRole === 'team') {
+      people = await loadPeople(db)
+    }
     populateFilters()
 
-    // Subscribe to tasks (real-time)
-    unsubTasks = subscribeToTasks(db, (tasks) => {
-      allTasks = tasks
-      renderCurrentView()
-    })
+    // Resolve client name for client users
+    if (userRole === 'client' && userClientId) {
+      const clientDoc = clients.find((c) => c.id === userClientId)
+      userClientName = clientDoc?.name || 'Client'
+    }
 
-    // Read initial route from hash (or default to #/my-day)
+    // Adapt UI for client role
+    if (userRole === 'client') {
+      // Update header logo
+      const headerLogo = document.querySelector('.header-logo')
+      if (headerLogo) headerLogo.innerHTML = `PK<span class="header-logo-dot">.</span> <span class="header-logo-client">for ${esc(userClientName)}</span>`
+
+      // Hide team-only nav tabs
+      navTabs.forEach((tab) => {
+        const view = tab.dataset.view
+        const teamOnlyViews = ['my-day', 'my-tasks', 'board', 'standup', 'timesheets', 'people', 'wiki', 'references', 'clients']
+        if (teamOnlyViews.includes(view)) tab.style.display = 'none'
+      })
+
+      // Show client nav tabs
+      document.querySelectorAll('.client-nav').forEach((tab) => {
+        tab.style.display = ''
+        tab.classList.remove('hidden')
+      })
+
+      // Hide team-only header controls
+      const filterGroup = document.getElementById('filter-group')
+      if (filterGroup) filterGroup.style.display = 'none'
+      newTaskBtn.style.display = 'none'
+    }
+
+    // Subscribe to tasks (real-time) — scoped for client users
+    if (userRole === 'client') {
+      unsubTasks = subscribeToTasksByClient(db, userClientId, (tasks) => {
+        allTasks = tasks
+        renderCurrentView()
+      })
+    } else {
+      unsubTasks = subscribeToTasks(db, (tasks) => {
+        allTasks = tasks
+        renderCurrentView()
+      })
+    }
+
+    // Read initial route from hash (or default)
     handleRouteChange()
   } else {
     currentUser = null
+    userRole = null
+    userClientId = null
+    userClientName = null
     loginScreen.classList.remove('hidden')
     appShell.classList.add('hidden')
     if (unsubTasks) {
@@ -562,6 +639,12 @@ function renderCurrentView() {
       break
     case 'timesheets':
       renderTimesheets(mainContent, allTasks, ctx)
+      break
+    case 'client-board':
+      renderClientBoard(mainContent, tasks, { ...ctx, userClientId, userClientName })
+      break
+    case 'client-timesheets':
+      renderClientTimesheets(mainContent, allTasks, { ...ctx, userClientId, userClientName })
       break
   }
 }
