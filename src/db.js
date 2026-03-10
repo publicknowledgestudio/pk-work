@@ -184,6 +184,18 @@ export function subscribeToTasks(db, callback) {
   })
 }
 
+export function subscribeToTasksByClient(db, clientId, callback) {
+  const q = query(
+    collection(db, 'tasks'),
+    where('clientId', '==', clientId),
+    orderBy('updatedAt', 'desc')
+  )
+  return onSnapshot(q, (snap) => {
+    const tasks = snap.docs.map((d) => normalizeTask({ id: d.id, ...d.data() }))
+    callback(tasks)
+  })
+}
+
 export async function createTask(db, data) {
   const assignees = data.assignees || (data.assignee ? [data.assignee] : [])
   return addDoc(collection(db, 'tasks'), {
@@ -389,6 +401,41 @@ export async function updateReference(db, refId, data) {
 
 export async function deleteReference(db, refId) {
   return deleteDoc(doc(db, 'references', refId))
+}
+
+// ===== Client Users =====
+
+export async function loadClientUser(db, email) {
+  const snap = await getDoc(doc(db, 'clientUsers', email))
+  if (snap.exists()) return { id: snap.id, ...snap.data() }
+  return null
+}
+
+export async function loadClientUsers(db) {
+  const q = query(collection(db, 'clientUsers'), orderBy('createdAt', 'desc'))
+  const snap = await getDocs(q)
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+}
+
+export async function createClientUser(db, email, data) {
+  return setDoc(doc(db, 'clientUsers', email.toLowerCase()), {
+    email: email.toLowerCase(),
+    name: data.name || '',
+    clientId: data.clientId,
+    invitedBy: data.invitedBy || '',
+    createdAt: serverTimestamp(),
+  })
+}
+
+export async function deleteClientUser(db, email) {
+  return deleteDoc(doc(db, 'clientUsers', email))
+}
+
+export function subscribeToClientUsers(db, callback) {
+  const q = query(collection(db, 'clientUsers'), orderBy('createdAt', 'desc'))
+  return onSnapshot(q, (snap) => {
+    callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+  })
 }
 
 // ===== Moodboards =====
