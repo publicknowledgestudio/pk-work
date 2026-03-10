@@ -48,9 +48,11 @@ src/                    Frontend (Vite + vanilla JS)
   standup.js            Standup form
   references.js         Visual reference library (grid, search, moodboards)
   modal.js              Task create/edit modal
+  client-board.js       Client kanban board (scoped to client org)
+  client-timesheets.js  Client timesheets (aggregated, no per-person)
 functions/              Cloud Functions backend
   index.js              All API endpoints (api + slackWebhook)
-firestore.rules         Security rules (@publicknowledge.co only)
+firestore.rules         Security rules (team + client allowlist)
 firestore.indexes.json  Composite indexes (14 indexes)
 CLAUDE.md               This file — project documentation
 CLAUDE_SCRUM_MASTER.md  Slack interaction guide with examples
@@ -120,6 +122,7 @@ The task model was migrated from `assignee` (single string) to `assignees` (arra
 - **notes** — content, source, taskIds, createdBy, createdAt
 - **references** — url, title, description, imageUrl, tags[], clientId, projectId, sharedBy, slackMessageTs, slackChannel, createdAt
 - **moodboards** — name, description, referenceIds[], clientId, projectId, createdBy, createdAt, updatedAt
+- **clientUsers** — email (doc ID), name, clientId, invitedBy, createdAt
 
 ## Firestore Indexes
 
@@ -299,6 +302,22 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/ai.openclaw.gateway.plis
 4. **Slack thread context:** Asty needs thread config (`initialHistoryLimit: 50`, `inheritParent: true`) to read who posted what in threads. Without this, it can't identify the original poster — leading to wrong actions (e.g., adding leave to the wrong person's calendar).
 
 5. **Config source of truth:** Asty's 6 config files (SOUL.md, TOOLS.md, AGENTS.md, IDENTITY.md, USER.md, HEARTBEAT.md) live in the `asty-kb` GitHub repo under `config/`. On the VM, `~/clawd/*.md` are symlinks to `~/knowledge-base/config/*.md`, and a crontab entry pulls the repo every 5 minutes. The old config-sync cron job (which fetched configs from Firestore via `pkwork_get_agent_config`) is disabled.
+
+## Client Login
+
+External client users can log in via Google sign-in to view their org's tasks and timesheets. Access is controlled by a `clientUsers/{email}` allowlist in Firestore.
+
+**Role detection flow:**
+1. User signs in with Google
+2. If email ends with `@publicknowledge.co` → team role (full access)
+3. Else check `clientUsers/{email}` doc exists → client role (scoped access)
+4. Else → access denied, auto-sign-out
+
+**Client routes:** `#client-board` (kanban scoped to clientId), `#client-timesheets` (aggregated, no per-person breakdown)
+
+**Firestore rules:** `isClientUser()` checks if `request.auth.token.email` exists in `clientUsers`. `clientIdForUser()` returns the clientId for a client user. Client users can only read tasks/projects matching their clientId.
+
+**Managing client users:** Team members invite client users from the Manage page → Client Users section. Each entry stores email, name, clientId, and invitedBy.
 
 ## Clients
 
