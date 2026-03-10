@@ -9,6 +9,9 @@ import {
   subscribeToProjects,
   uploadClientLogo,
   updateProjectContent,
+  createClientUser,
+  deleteClientUser,
+  subscribeToClientUsers,
 } from './db.js'
 import { renderMarkdown } from './markdown.js'
 import { TEAM } from './config.js'
@@ -23,6 +26,8 @@ let currentCtx = null
 let activeProjectId = null
 let projectActiveTab = 'page'
 let projectIsEditing = false
+let unsubClientUsers = null
+let localClientUsers = []
 
 export function renderClients(container, ctx) {
   // Clean up previous subscriptions
@@ -95,6 +100,25 @@ export function renderClients(container, ctx) {
               </div>
               <div id="projects-list"></div>
             </div>
+
+            <div class="clients-section">
+              <div class="section-title-row">
+                <h3 class="section-title">Client Users</h3>
+                <button class="btn-primary" id="add-client-user-btn"><i class="ph ph-plus"></i> Invite</button>
+              </div>
+              <div id="add-client-user-form" class="inline-form hidden">
+                <input type="email" id="new-cu-email" class="form-input" placeholder="Email address">
+                <input type="text" id="new-cu-name" class="form-input" placeholder="Name">
+                <select id="new-cu-client" class="form-select">
+                  <option value="">Select client...</option>
+                </select>
+                <div class="inline-form-actions">
+                  <button class="btn-primary" id="save-cu-btn">Invite</button>
+                  <button class="btn-ghost" id="cancel-cu-btn">Cancel</button>
+                </div>
+              </div>
+              <div id="client-users-list"></div>
+            </div>
           </div>
         </div>
 
@@ -117,6 +141,12 @@ export function renderClients(container, ctx) {
     localProjects = projects
     renderProjectsList()
     renderClientsList() // Re-render clients to update project counts
+  })
+
+  unsubClientUsers = subscribeToClientUsers(ctx.db, (users) => {
+    localClientUsers = users
+    renderClientUsersList()
+    updateCUClientDropdown()
   })
 
   // Add client
@@ -270,6 +300,54 @@ export function renderClients(container, ctx) {
     if (e.key === 'Escape') cancelProjectBtn.click()
   })
 
+  // Add client user
+  const addCUBtn = document.getElementById('add-client-user-btn')
+  const addCUForm = document.getElementById('add-client-user-form')
+  const newCUEmail = document.getElementById('new-cu-email')
+  const newCUName = document.getElementById('new-cu-name')
+  const newCUClient = document.getElementById('new-cu-client')
+  const saveCUBtn = document.getElementById('save-cu-btn')
+  const cancelCUBtn = document.getElementById('cancel-cu-btn')
+
+  addCUBtn.addEventListener('click', () => {
+    newCUEmail.value = ''
+    newCUName.value = ''
+    newCUClient.value = ''
+    addCUForm.classList.remove('hidden')
+    newCUEmail.focus()
+  })
+
+  cancelCUBtn.addEventListener('click', () => addCUForm.classList.add('hidden'))
+
+  saveCUBtn.addEventListener('click', async () => {
+    const email = newCUEmail.value.trim().toLowerCase()
+    const name = newCUName.value.trim()
+    const clientId = newCUClient.value
+    if (!email || !name || !clientId) return
+    saveCUBtn.disabled = true
+    saveCUBtn.textContent = 'Inviting...'
+    try {
+      await createClientUser(ctx.db, email, {
+        name,
+        clientId,
+        invitedBy: ctx.currentUser?.email || '',
+      })
+    } catch (err) {
+      console.error('Error inviting client user:', err)
+    }
+    newCUEmail.value = ''
+    newCUName.value = ''
+    newCUClient.value = ''
+    addCUForm.classList.add('hidden')
+    saveCUBtn.disabled = false
+    saveCUBtn.textContent = 'Invite'
+  })
+
+  newCUEmail.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') saveCUBtn.click()
+    if (e.key === 'Escape') cancelCUBtn.click()
+  })
+
   function updateProjectClientDropdown() {
     const dropdown = document.getElementById('new-project-client')
     if (!dropdown) return
@@ -407,6 +485,52 @@ export function renderClients(container, ctx) {
       })
     })
   }
+}
+
+function updateCUClientDropdown() {
+  const dropdown = document.getElementById('new-cu-client')
+  if (!dropdown) return
+  const val = dropdown.value
+  dropdown.innerHTML = '<option value="">Select client...</option>'
+  localClients.forEach((c) => {
+    dropdown.innerHTML += `<option value="${c.id}">${c.name}</option>`
+  })
+  dropdown.value = val
+}
+
+function renderClientUsersList() {
+  const list = document.getElementById('client-users-list')
+  if (!list) return
+
+  if (localClientUsers.length === 0) {
+    list.innerHTML = '<div class="empty-state"><div class="empty-state-text">No client users yet. Invite someone to give them access.</div></div>'
+    return
+  }
+
+  list.innerHTML = localClientUsers.map((cu) => {
+    const client = localClients.find((c) => c.id === cu.clientId)
+    const inviter = TEAM.find((m) => m.email === cu.invitedBy)
+    return `
+      <div class="client-row" data-email="${cu.email}">
+        <div class="client-row-info">
+          <span class="client-row-name">${escHtml(cu.name)}</span>
+          <span class="client-row-meta">${escHtml(cu.email)} · ${client ? escHtml(client.name) : 'Unknown client'}${inviter ? ' · Invited by ' + escHtml(inviter.name) : ''}</span>
+        </div>
+        <div class="client-row-actions">
+          <button class="btn-ghost cu-delete" data-email="${cu.email}" data-name="${escHtml(cu.name)}"><i class="ph ph-trash"></i></button>
+        </div>
+      </div>
+    `
+  }).join('')
+
+  list.querySelectorAll('.cu-delete').forEach((btn) => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation()
+      if (confirm(`Remove access for "${btn.dataset.name}"?`)) {
+        await deleteClientUser(currentCtx.db, btn.dataset.email)
+      }
+    })
+  })
 }
 
 // ===== Project Detail Panel =====
@@ -689,6 +813,7 @@ function escHtml(str) {
 export function cleanupClients() {
   if (unsubClients) { unsubClients(); unsubClients = null }
   if (unsubProjects) { unsubProjects(); unsubProjects = null }
+  if (unsubClientUsers) { unsubClientUsers(); unsubClientUsers = null }
   currentCtx = null
   activeProjectId = null
   projectIsEditing = false
