@@ -13,7 +13,7 @@ export function renderBoard(container, tasks, ctx) {
     <div class="column" data-status="${s.id}">
       <div class="column-header">
         <span class="column-dot" style="background:${s.color}"></span>
-        <span class="column-label">${s.label}</span>
+        <span class="column-label">${s.id === 'done' ? 'Done (Last 14d)' : s.label}</span>
         <span class="column-count">${tasks.filter((t) => t.status === s.id).length}</span>
       </div>
       <div class="column-tasks" data-status="${s.id}">

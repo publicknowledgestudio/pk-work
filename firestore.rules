@@ -88,7 +88,7 @@ service cloud.firestore {
 
     // Daily focus (per-user daily task curation)
     match /dailyFocus/{docId} {
-      allow read: if isTeamMember();
+      allow read: if isTeamMember() || isClientUser();
       allow create: if isTeamMember();
       allow update: if isTeamMember() &&
         resource.data.userEmail == request.auth.token.email;
@@ -109,6 +109,20 @@ service cloud.firestore {
 
     // Processes collection (studio SOPs / runbooks)
     match /processes/{processId} {
+      allow read: if isTeamMember();
+      allow write: if isTeamMember();
+    }
+
+    // Leaves collection (attendance & leave tracking)
+    match /leaves/{leaveId} {
+      allow read: if isTeamMember();
+      allow create: if isTeamMember();
+      allow update: if isTeamMember();
+      allow delete: if isTeamMember();
+    }
+
+    // Studio holidays (admin-managed)
+    match /holidays/{holidayId} {
       allow read: if isTeamMember();
       allow write: if isTeamMember();
     }

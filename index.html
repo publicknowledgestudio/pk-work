@@ -6,7 +6,7 @@
   <title>Work — Public Knowledge Studio</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/src/style.css">
   <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
   <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css">
@@ -15,14 +15,12 @@
   <!-- Login Screen -->
   <div id="login-screen">
     <div class="login-card">
-      <div class="login-logo">PK</div>
-      <h1 class="login-title">Public Knowledge Studio</h1>
-      <p class="login-subtitle">Work Management</p>
+      <img src="/pks-logo.png" alt="Public Knowledge Studio" class="login-logo-img">
+      <p class="login-subtitle">Log in with your Google account to access Public Knowledge Studio's task tracking tool. If you think you should have access, message your contact at the studio.</p>
       <button id="login-btn" class="btn-google">
         <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
         Sign in with Google
       </button>
-      <p class="login-note">Sign in with your Google account</p>
     </div>
   </div>
 
@@ -31,17 +29,17 @@
     <header id="app-header">
       <div class="header-top">
         <div class="header-left">
-          <span class="header-logo">PK<span class="header-logo-dot">.</span></span>
+          <span class="header-logo">PK Work</span>
           <nav class="header-nav">
-            <button class="nav-tab active" data-view="my-day"><i class="ph-fill ph-sun"></i> <span class="nav-label">My Day</span></button>
+            <button class="nav-tab active" data-view="my-day"><i class="ph-fill ph-sun"></i> <span class="nav-label">My Week</span></button>
             <button class="nav-tab" data-view="my-tasks"><i class="ph-fill ph-user-focus"></i> <span class="nav-label">My Tasks</span></button>
             <span class="nav-divider"></span>
             <button class="nav-tab" data-view="board"><i class="ph-fill ph-columns"></i> <span class="nav-label">Board</span></button>
             <button class="nav-tab" data-view="standup"><i class="ph-fill ph-lightning"></i> <span class="nav-label">Standup</span></button>
             <button class="nav-tab" data-view="timesheets"><i class="ph-fill ph-receipt"></i> <span class="nav-label">Timesheets</span></button>
+            <button class="nav-tab" data-view="attendance"><i class="ph-fill ph-calendar-check"></i> <span class="nav-label">Leaves</span></button>
             <span class="nav-divider"></span>
             <button class="nav-tab" data-view="people"><i class="ph-fill ph-address-book"></i> <span class="nav-label">People</span></button>
-            <button class="nav-tab" data-view="wiki"><i class="ph-fill ph-book-open"></i> <span class="nav-label">Wiki</span></button>
             <button class="nav-tab" data-view="references"><i class="ph-fill ph-image-square"></i> <span class="nav-label">References</span></button>
             <button class="nav-tab" data-view="clients"><i class="ph-fill ph-gear"></i> <span class="nav-label">Manage</span></button>
             <button class="nav-tab client-nav hidden" data-view="client-board"><i class="ph-fill ph-columns"></i> <span class="nav-label">Board</span></button>
@@ -66,14 +64,45 @@
             </select>
           </div>
           <button id="new-task-btn" class="btn-primary"><i class="ph ph-plus"></i> <span class="btn-label">Task</span></button>
-          <div class="user-menu">
-            <div id="user-avatar" class="avatar-sm"></div>
-            <button id="logout-btn" class="btn-ghost"><i class="ph ph-sign-out"></i> <span class="btn-label">Sign out</span></button>
+          <div class="user-menu" id="user-menu">
+            <button class="user-menu-trigger" id="user-menu-trigger">
+              <div id="user-avatar" class="avatar-sm"></div>
+              <i class="ph ph-caret-down user-menu-caret"></i>
+            </button>
+            <div class="user-menu-dropdown hidden" id="user-menu-dropdown">
+              <div class="user-menu-info" id="user-menu-info"></div>
+              <button id="logout-btn" class="user-menu-item"><i class="ph ph-sign-out"></i> Sign out</button>
+            </div>
           </div>
         </div>
       </div>
     </header>
     <main id="main-content"></main>
+
+    <!-- Mobile Bottom Nav -->
+    <nav class="mobile-bottom-nav" id="mobile-bottom-nav">
+      <button class="mobile-nav-btn active" data-view="my-day"><i class="ph-fill ph-sun"></i><span>My Week</span></button>
+      <button class="mobile-nav-btn" data-view="board"><i class="ph-fill ph-columns"></i><span>Board</span></button>
+      <button class="mobile-nav-btn" data-view="standup"><i class="ph-fill ph-lightning"></i><span>Standup</span></button>
+      <button class="mobile-nav-btn" data-view="attendance"><i class="ph-fill ph-calendar-check"></i><span>Leaves</span></button>
+      <button class="mobile-nav-btn" data-view="more" id="mobile-more-btn"><i class="ph-fill ph-dots-three-outline"></i><span>More</span></button>
+    </nav>
+
+    <!-- Mobile More Sheet -->
+    <div class="mobile-more-sheet hidden" id="mobile-more-sheet">
+      <div class="mobile-more-overlay" id="mobile-more-overlay"></div>
+      <div class="mobile-more-content">
+        <div class="mobile-more-header">
+          <span>More</span>
+          <button class="modal-close" id="mobile-more-close">&times;</button>
+        </div>
+        <button class="mobile-more-item" data-view="my-tasks"><i class="ph-fill ph-user-focus"></i> My Tasks</button>
+        <button class="mobile-more-item" data-view="timesheets"><i class="ph-fill ph-receipt"></i> Timesheets</button>
+        <button class="mobile-more-item" data-view="people"><i class="ph-fill ph-address-book"></i> People</button>
+        <button class="mobile-more-item" data-view="references"><i class="ph-fill ph-image-square"></i> References</button>
+        <button class="mobile-more-item" data-view="clients"><i class="ph-fill ph-gear"></i> Manage</button>
+      </div>
+    </div>
   </div>
 
   <!-- Task Modal -->
@@ -169,6 +198,62 @@
         <div class="modal-footer-right">
           <button id="task-cancel" class="btn-ghost">Cancel</button>
           <button id="task-save" class="btn-primary">Save Task</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Leave Request Modal -->
+  <div id="leave-modal" class="modal-overlay hidden">
+    <div class="modal modal-sm">
+      <div class="modal-header">
+        <h2 class="modal-title" id="leave-modal-title">Request Leave</h2>
+        <button class="modal-close" id="leave-modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row" id="leave-person-row" style="display:none">
+          <label class="form-label">Person</label>
+          <select id="leave-person" class="form-select"></select>
+        </div>
+        <div class="form-row">
+          <label class="form-label">Type</label>
+          <div id="leave-type-pills" class="status-pills">
+            <button type="button" class="status-pill active" data-type="personal">
+              <i class="ph ph-calendar"></i>
+              <span>Personal</span>
+            </button>
+            <button type="button" class="status-pill" data-type="medical">
+              <i class="ph ph-first-aid-kit"></i>
+              <span>Medical</span>
+            </button>
+          </div>
+        </div>
+        <div class="form-grid">
+          <div class="form-row">
+            <label class="form-label">Start Date</label>
+            <input type="date" id="leave-start" class="form-input">
+          </div>
+          <div class="form-row">
+            <label class="form-label">End Date</label>
+            <input type="date" id="leave-end" class="form-input">
+          </div>
+        </div>
+        <div class="form-row">
+          <label class="leave-half-day-label">
+            <input type="checkbox" id="leave-half-day">
+            <span>Half day (0.5 days)</span>
+          </label>
+        </div>
+        <div class="form-row">
+          <label class="form-label">Note <span class="form-hint">(optional)</span></label>
+          <textarea id="leave-note" class="form-textarea" rows="2" placeholder="Reason or context..."></textarea>
+        </div>
+        <div id="leave-summary" class="leave-summary hidden"></div>
+      </div>
+      <div class="modal-footer">
+        <div class="modal-footer-right">
+          <button id="leave-cancel-btn" class="btn-ghost">Cancel</button>
+          <button id="leave-save-btn" class="btn-primary">Request Leave</button>
         </div>
       </div>
     </div>

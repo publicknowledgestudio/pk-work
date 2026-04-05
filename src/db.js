@@ -188,11 +188,48 @@ export function normalizeTask(task) {
 }
 
 export function subscribeToTasks(db, callback) {
-  const q = query(collection(db, 'tasks'), orderBy('updatedAt', 'desc'))
-  return onSnapshot(q, (snap) => {
-    const tasks = snap.docs.map((d) => normalizeTask({ id: d.id, ...d.data() }))
-    callback(tasks)
+  const cutoff = new Date()
+  cutoff.setDate(cutoff.getDate() - 14)
+  const cutoffTs = Timestamp.fromDate(cutoff)
+
+  // Active tasks (everything not done)
+  const activeQ = query(
+    collection(db, 'tasks'),
+    where('status', 'in', ['backlog', 'todo', 'in_progress', 'review']),
+    orderBy('updatedAt', 'desc')
+  )
+  // Recent done tasks (closed in last 14 days)
+  const doneQ = query(
+    collection(db, 'tasks'),
+    where('status', '==', 'done'),
+    where('closedAt', '>=', cutoffTs),
+    orderBy('closedAt', 'desc')
+  )
+
+  let activeTasks = []
+  let doneTasks = []
+  const merge = () => {
+    const seen = new Set()
+    const merged = []
+    for (const t of [...activeTasks, ...doneTasks]) {
+      if (!seen.has(t.id)) {
+        seen.add(t.id)
+        merged.push(t)
+      }
+    }
+    callback(merged)
+  }
+
+  const unsub1 = onSnapshot(activeQ, (snap) => {
+    activeTasks = snap.docs.map((d) => normalizeTask({ id: d.id, ...d.data() }))
+    merge()
   })
+  const unsub2 = onSnapshot(doneQ, (snap) => {
+    doneTasks = snap.docs.map((d) => normalizeTask({ id: d.id, ...d.data() }))
+    merge()
+  })
+
+  return () => { unsub1(); unsub2() }
 }
 
 export function subscribeToTasksByClient(db, clientId, callback) {
@@ -296,7 +333,12 @@ export async function saveDailyFocus(db, userEmail, dateStr, taskIds, timeBlocks
   if (timeBlocks !== undefined) {
     data.timeBlocks = timeBlocks
   }
-  return setDoc(doc(db, 'dailyFocus', docId), data, { merge: true })
+  try {
+    await setDoc(doc(db, 'dailyFocus', docId), data, { merge: true })
+  } catch (err) {
+    console.error('[saveDailyFocus] Failed to save:', docId, err)
+    throw err
+  }
 }
 
 // ===== Timesheet Queries =====
@@ -480,4 +522,79 @@ export async function updateMoodboard(db, boardId, data) {
 
 export async function deleteMoodboard(db, boardId) {
   return deleteDoc(doc(db, 'moodboards', boardId))
+}
+
+// ===== Leaves (Attendance) =====
+
+export function subscribeToLeaves(db, callback) {
+  const q = query(collection(db, 'leaves'), orderBy('startDate', 'desc'))
+  return onSnapshot(q, (snap) => {
+    callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+  })
+}
+
+export async function createLeave(db, data) {
+  return addDoc(collection(db, 'leaves'), {
+    userEmail: data.userEmail,
+    userName: data.userName || '',
+    type: data.type,
+    startDate: data.startDate,
+    endDate: data.endDate || data.startDate,
+    halfDay: data.halfDay || false,
+    days: data.days || 0,
+    paidDays: data.paidDays || 0,
+    unpaidDays: data.unpaidDays || 0,
+    status: 'approved',
+    note: data.note || '',
+    createdBy: data.createdBy || '',
+    cancelledBy: null,
+    cancelledAt: null,
+    createdAt: serverTimestamp(),
+  })
+}
+
+export async function updateLeave(db, leaveId, data) {
+  return updateDoc(doc(db, 'leaves', leaveId), data)
+}
+
+export async function cancelLeave(db, leaveId, cancelledBy) {
+  return updateDoc(doc(db, 'leaves', leaveId), {
+    status: 'cancelled',
+    cancelledBy,
+    cancelledAt: serverTimestamp(),
+  })
+}
+
+export async function loadLeaves(db, filters = {}) {
+  let q = collection(db, 'leaves')
+  const constraints = []
+
+  if (filters.userEmail) constraints.push(where('userEmail', '==', filters.userEmail))
+  if (filters.status) constraints.push(where('status', '==', filters.status))
+  constraints.push(orderBy('startDate', 'desc'))
+
+  const snap = await getDocs(query(q, ...constraints))
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+}
+
+// ===== Holidays =====
+
+export function subscribeToHolidays(db, callback) {
+  const q = query(collection(db, 'holidays'), orderBy('date', 'asc'))
+  return onSnapshot(q, (snap) => {
+    callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+  })
+}
+
+export async function createHoliday(db, data) {
+  return addDoc(collection(db, 'holidays'), {
+    date: data.date,
+    name: data.name || '',
+    createdBy: data.createdBy || '',
+    createdAt: serverTimestamp(),
+  })
+}
+
+export async function deleteHoliday(db, holidayId) {
+  return deleteDoc(doc(db, 'holidays', holidayId))
 }

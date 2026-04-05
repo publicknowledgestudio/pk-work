@@ -19,6 +19,16 @@ const admin = require('firebase-admin')
 admin.initializeApp()
 const db = admin.firestore()
 
+// Team config for leave balance calculations
+const TEAM_MEMBERS = [
+  { email: 'gyan@publicknowledge.co', name: 'Gyan', role: 'admin', joinDate: '2026-03-01' },
+  { email: 'charu@publicknowledge.co', name: 'Charu', role: 'admin', joinDate: '2026-03-01' },
+  { email: 'sharang@publicknowledge.co', name: 'Sharang', role: 'member', joinDate: '2026-03-01' },
+  { email: 'anandu@publicknowledge.co', name: 'Anandu', role: 'member', joinDate: '2026-03-01' },
+  { email: 'mohit@publicknowledge.co', name: 'Mohit', role: 'member', joinDate: '2026-03-16' },
+  { email: 'rakesh@publicknowledge.co', name: 'Rakesh', role: 'member', joinDate: '2026-04-01' },
+]
+
 const CLAUDE_API_KEY = defineSecret('CLAUDE_API_KEY')
 const SLACK_WEBHOOK_URL = defineSecret('SLACK_WEBHOOK_URL')
 const OPENCLAW_WEBHOOK_URL = defineSecret('OPENCLAW_WEBHOOK_URL')
@@ -189,6 +199,22 @@ exports.api = onRequest(
       }
     }
 
+    // --- LEAVES ---
+    if (segments[0] === 'leaves') {
+      if (segments.length === 2 && segments[1] === 'balances' && req.method === 'GET') {
+        return await getLeaveBalances(req, res)
+      }
+      if (req.method === 'GET' && segments.length === 1) {
+        return await listLeaves(req, res)
+      }
+      if (req.method === 'POST' && segments.length === 1) {
+        return await createLeave(req, res)
+      }
+      if (req.method === 'PATCH' && segments.length === 2) {
+        return await cancelLeave(req, res, segments[1])
+      }
+    }
+
     res.status(404).json({ error: 'Not found' })
   } catch (err) {
     console.error('API error:', err)
@@ -314,7 +340,7 @@ function notifyOpenClaw(taskId, task, action) {
   }
 
   const payload = {
-    event: 'task_assigned',
+    event: task.event || 'task_assigned',
     action,
     task: { id: taskId, ...serializableTask },
   }
@@ -330,7 +356,7 @@ function notifyOpenClaw(taskId, task, action) {
   }).catch((err) => console.error('OpenClaw webhook error:', err))
 }
 
-// === Firestore Trigger — Notify OpenClaw when Asty is assigned ===
+// === Firestore Trigger — Notify OpenClaw on key task events ===
 
 exports.onTaskWritten = onDocumentWritten(
   { document: 'tasks/{taskId}', secrets: [OPENCLAW_WEBHOOK_URL, OPENCLAW_WEBHOOK_SECRET] },
@@ -339,16 +365,24 @@ exports.onTaskWritten = onDocumentWritten(
     if (!after?.exists) return // task deleted — ignore
 
     const task = after.data()
+    const before = event.data?.before?.data()
     const afterAssignees = task.assignees || []
-    const beforeAssignees = event.data?.before?.data()?.assignees || []
+    const beforeAssignees = before?.assignees || []
 
-    // Only notify when Asty is newly added — not on every subsequent update
+    // Notify when Asty is newly assigned
     const newlyAssigned = afterAssignees.includes(ASTY_EMAIL) && !beforeAssignees.includes(ASTY_EMAIL)
-    if (!newlyAssigned) return
+    if (newlyAssigned) {
+      const action = event.data?.before?.exists ? 'updated' : 'created'
+      const projectName = await lookupProjectName(task.projectId)
+      notifyOpenClaw(event.params.taskId, { ...task, projectName }, action)
+    }
 
-    const action = event.data?.before?.exists ? 'updated' : 'created'
-    const projectName = await lookupProjectName(task.projectId)
-    notifyOpenClaw(event.params.taskId, { ...task, projectName }, action)
+    // Notify when a task is marked as done
+    const justCompleted = task.status === 'done' && before?.status && before.status !== 'done'
+    if (justCompleted) {
+      const projectName = await lookupProjectName(task.projectId)
+      notifyOpenClaw(event.params.taskId, { ...task, projectName, event: 'task_completed' }, 'completed')
+    }
   }
 )
 
@@ -924,4 +958,171 @@ async function updateMoodboard(req, res, boardId) {
 async function deleteMoodboard(req, res, boardId) {
   await db.collection('moodboards').doc(boardId).delete()
   res.json({ id: boardId, deleted: true })
+}
+
+// === Leave Helpers ===
+
+function countWeekdays(startDate, endDate) {
+  let count = 0
+  const start = new Date(startDate + 'T00:00:00')
+  const end = new Date(endDate + 'T00:00:00')
+  const current = new Date(start)
+  while (current <= end) {
+    const day = current.getDay()
+    if (day !== 0 && day !== 6) count++
+    current.setDate(current.getDate() + 1)
+  }
+  return count
+}
+
+function monthsSinceJoin(joinDate) {
+  const join = new Date(joinDate + 'T00:00:00')
+  const now = new Date()
+  // Include the current month (join March 1 → March counts as month 1)
+  let months = (now.getFullYear() - join.getFullYear()) * 12 + (now.getMonth() - join.getMonth()) + 1
+  return Math.max(0, months)
+}
+
+// === Leave Handlers ===
+
+async function listLeaves(req, res) {
+  let q = db.collection('leaves')
+
+  if (req.query.userEmail) q = q.where('userEmail', '==', req.query.userEmail)
+  if (req.query.status) q = q.where('status', '==', req.query.status)
+
+  q = q.orderBy('startDate', 'desc')
+
+  const snap = await q.get()
+  let leaves = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+
+  if (req.query.startDate) {
+    leaves = leaves.filter((l) => l.startDate >= req.query.startDate)
+  }
+  if (req.query.endDate) {
+    leaves = leaves.filter((l) => l.startDate <= req.query.endDate)
+  }
+
+  res.json({ leaves })
+}
+
+async function createLeave(req, res) {
+  const data = req.body
+  if (!data.userEmail) return res.status(400).json({ error: 'userEmail is required' })
+  if (!data.type || !['personal', 'medical'].includes(data.type)) {
+    return res.status(400).json({ error: 'type must be "personal" or "medical"' })
+  }
+  if (!data.startDate) return res.status(400).json({ error: 'startDate is required' })
+
+  const endDate = data.endDate || data.startDate
+  const halfDay = !!data.halfDay
+  const days = halfDay ? 0.5 : countWeekdays(data.startDate, endDate)
+
+  let paidDays = days
+  let unpaidDays = 0
+
+  if (data.type === 'personal') {
+    const member = TEAM_MEMBERS.find((m) => m.email === data.userEmail)
+    if (member) {
+      const accrued = monthsSinceJoin(member.joinDate)
+      const existingSnap = await db.collection('leaves')
+        .where('userEmail', '==', data.userEmail)
+        .where('type', '==', 'personal')
+        .where('status', '==', 'approved')
+        .get()
+      let usedDays = 0
+      existingSnap.docs.forEach((d) => {
+        const l = d.data()
+        usedDays += l.halfDay ? 0.5 : countWeekdays(l.startDate, l.endDate || l.startDate)
+      })
+      const available = Math.max(0, accrued - usedDays)
+      paidDays = Math.min(days, available)
+      unpaidDays = days - paidDays
+    }
+  }
+
+  const leave = {
+    userEmail: data.userEmail,
+    userName: data.userName || '',
+    type: data.type,
+    startDate: data.startDate,
+    endDate: endDate,
+    halfDay,
+    days,
+    paidDays,
+    unpaidDays,
+    status: 'approved',
+    note: data.note || '',
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    createdBy: data.createdBy || '',
+    cancelledBy: null,
+    cancelledAt: null,
+  }
+
+  const ref = await db.collection('leaves').add(leave)
+  res.status(201).json({ id: ref.id, ...leave })
+}
+
+async function cancelLeave(req, res, leaveId) {
+  const data = req.body
+  const docRef = db.collection('leaves').doc(leaveId)
+  const doc = await docRef.get()
+
+  if (!doc.exists) return res.status(404).json({ error: 'Leave not found' })
+
+  await docRef.update({
+    status: 'cancelled',
+    cancelledBy: data.cancelledBy || '',
+    cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
+  })
+
+  res.json({ id: leaveId, cancelled: true })
+}
+
+async function getLeaveBalances(req, res) {
+  const members = req.query.userEmail
+    ? TEAM_MEMBERS.filter((m) => m.email === req.query.userEmail)
+    : TEAM_MEMBERS
+
+  const snap = await db.collection('leaves').where('status', '==', 'approved').get()
+  const allLeaves = snap.docs.map((d) => d.data())
+
+  // Current month string for medical (non-rolling) calculation
+  const now = new Date()
+  const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+
+  const balances = members.map((member) => {
+    const accrued = monthsSinceJoin(member.joinDate)
+    const memberLeaves = allLeaves.filter((l) => l.userEmail === member.email)
+
+    const personalLeaves = memberLeaves.filter((l) => l.type === 'personal')
+    const medicalLeaves = memberLeaves.filter((l) => l.type === 'medical')
+
+    const personalUsed = personalLeaves.reduce((sum, l) => sum + (l.halfDay ? 0.5 : countWeekdays(l.startDate, l.endDate || l.startDate)), 0)
+
+    // Medical: 1 per month, does NOT roll over — only count current month usage
+    const medicalUsedThisMonth = medicalLeaves
+      .filter((l) => l.startDate.startsWith(currentMonthStr))
+      .reduce((sum, l) => sum + (l.halfDay ? 0.5 : countWeekdays(l.startDate, l.endDate || l.startDate)), 0)
+    const medicalTotalUsed = medicalLeaves.reduce((sum, l) => sum + (l.halfDay ? 0.5 : countWeekdays(l.startDate, l.endDate || l.startDate)), 0)
+
+    return {
+      userEmail: member.email,
+      userName: member.name,
+      joinDate: member.joinDate,
+      personal: {
+        accrued,
+        used: personalUsed,
+        available: accrued - personalUsed,
+      },
+      medical: {
+        accrued: 1,
+        used: medicalUsedThisMonth,
+        totalUsed: medicalTotalUsed,
+        available: 1 - medicalUsedThisMonth,
+      },
+    }
+  })
+
+  res.json({ balances })
 }

@@ -18,17 +18,16 @@ export function renderClientBoard(container, tasks, ctx) {
 
     container.innerHTML = `
       <div class="client-board-view">
-        <div class="client-board-header">
-          <h2>Public Knowledge for ${esc(ctx.userClientName)}</h2>
-          ${clientProjects.length > 1 ? `
-            <select class="form-select client-project-filter" id="client-project-filter">
-              <option value="">All Projects</option>
-              ${clientProjects.map((p) => `<option value="${p.id}"${p.id === selectedProjectId ? ' selected' : ''}>${esc(p.name)}</option>`).join('')}
-            </select>
-          ` : ''}
-        </div>
+        ${clientProjects.length > 1 ? `
+          <div class="client-board-header">
+            <div class="segmented-control" id="client-project-filter">
+              <button class="segment${!selectedProjectId ? ' active' : ''}" data-project="">All Projects</button>
+              ${clientProjects.map((p) => `<button class="segment${p.id === selectedProjectId ? ' active' : ''}" data-project="${p.id}">${esc(p.name)}</button>`).join('')}
+            </div>
+          </div>
+        ` : ''}
         <div class="board">
-          ${STATUSES.map((s) => `
+          ${STATUSES.filter((s) => s.id !== 'backlog').map((s) => `
             <div class="column" data-status="${s.id}">
               <div class="column-header">
                 <span class="column-dot" style="background:${s.color}"></span>
@@ -49,14 +48,13 @@ export function renderClientBoard(container, tasks, ctx) {
       </div>
     `
 
-    // Project filter
-    const filterEl = container.querySelector('#client-project-filter')
-    if (filterEl) {
-      filterEl.addEventListener('change', () => {
-        selectedProjectId = filterEl.value
+    // Project filter (segmented control)
+    container.querySelectorAll('#client-project-filter .segment').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        selectedProjectId = btn.dataset.project
         render()
       })
-    }
+    })
 
     // Task card clicks
     container.querySelectorAll('.task-card').forEach((card) => {
@@ -133,32 +131,82 @@ export function renderClientBoard(container, tasks, ctx) {
 
 function taskCard(task, ctx) {
   const project = task.projectId ? ctx.projects.find((p) => p.id === task.projectId) : null
-  const assigneeAvatars = (task.assignees || []).map((email) => {
-    const m = TEAM.find((t) => t.email === email)
-    if (!m) return ''
-    return m.photoURL
-      ? `<img class="avatar-photo-xs" src="${m.photoURL}" alt="${m.name}" title="${m.name}">`
-      : `<span class="avatar-xs" style="background:${m.color}" title="${m.name}">${m.name[0]}</span>`
-  }).join('')
+  const client = ctx.clients.find((c) => c.id === task.clientId)
+  const isDone = task.status === 'done'
 
-  const priorityBadge = task.priority === 'urgent' || task.priority === 'high'
-    ? `<span class="priority-badge priority-${task.priority}">${task.priority}</span>`
+  const deadlineStr = formatDeadline(task.deadline)
+  const isOverdue = task.deadline && !isDone && toDate(task.deadline) < new Date()
+
+  const clientLogo = client?.logoUrl
+    ? `<img class="client-logo-xs" src="${client.logoUrl}" alt="${esc(client.name)}" title="${esc(client.name)}">`
     : ''
 
-  const projectLabel = project ? `<span class="task-card-project">${esc(project.name)}</span>` : ''
-
   return `
-    <div class="task-card" data-id="${task.id}" draggable="true">
-      <div class="task-card-top">
-        ${projectLabel}
-        ${priorityBadge}
+    <div class="task-card${isDone ? ' done' : ''}" data-id="${task.id}" draggable="true">
+      <div class="task-card-header">
+        ${statusIcon(task.status)}
+        ${task.priority === 'urgent' ? '<i class="ph-fill ph-warning urgent-icon"></i>' : ''}
+        <span class="task-card-title">${esc(task.title)}</span>
       </div>
-      <div class="task-card-title">${esc(task.title)}</div>
-      <div class="task-card-bottom">
-        <div class="task-card-avatars">${assigneeAvatars}</div>
+      <div class="task-card-meta">
+        <div class="task-card-tags">
+          ${clientLogo}
+          ${client ? `<span class="task-tag">${esc(client.name)}</span>` : ''}
+          ${project ? `<span class="task-tag">${esc(project.name)}</span>` : ''}
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          ${deadlineStr ? `<span class="task-card-deadline${isOverdue ? ' overdue' : ''}">${deadlineStr}</span>` : ''}
+          ${avatarStack(task.assignees)}
+        </div>
       </div>
     </div>
   `
+}
+
+function statusIcon(status) {
+  switch (status) {
+    case 'done':
+      return '<button class="status-btn" data-action="cycle-status" title="Done — click to cycle"><i class="ph-fill ph-check-circle status-icon done"></i></button>'
+    case 'todo':
+      return '<button class="status-btn" data-action="cycle-status" title="To Do — click to start"><i class="ph ph-circle status-icon todo"></i></button>'
+    case 'in_progress':
+      return '<button class="status-btn" data-action="cycle-status" title="In Progress — click to advance"><i class="ph-fill ph-circle-half status-icon in-progress"></i></button>'
+    case 'review':
+      return '<button class="status-btn" data-action="cycle-status" title="Review — click to complete"><i class="ph-fill ph-caret-circle-double-right status-icon review"></i></button>'
+    default:
+      return '<i class="ph-fill ph-prohibit status-icon backlog"></i>'
+  }
+}
+
+function avatarStack(assignees) {
+  if (!assignees || assignees.length === 0) return ''
+  const members = assignees.map((email) => TEAM.find((m) => m.email === email)).filter(Boolean)
+  if (members.length === 0) return ''
+  return `<div class="avatar-stack">${members.map((m) =>
+    m.photoURL
+      ? `<img class="avatar-photo-xs" src="${m.photoURL}" alt="${m.name}" title="${m.name}">`
+      : `<span class="avatar-xs" style="background:${m.color}" title="${m.name}">${m.name[0]}</span>`
+  ).join('')}</div>`
+}
+
+function formatDeadline(deadline) {
+  if (!deadline) return ''
+  const d = toDate(deadline)
+  const now = new Date()
+  const diff = Math.ceil((d - now) / (1000 * 60 * 60 * 24))
+  if (diff === 0) return 'Today'
+  if (diff === 1) return 'Tomorrow'
+  if (diff === -1) return 'Yesterday'
+  if (diff < -1) return `${Math.abs(diff)}d ago`
+  if (diff <= 7) return `${diff}d`
+  return d.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })
+}
+
+function toDate(ts) {
+  if (!ts) return null
+  if (ts.toDate) return ts.toDate()
+  if (ts.seconds) return new Date(ts.seconds * 1000)
+  return new Date(ts)
 }
 
 function esc(str) {

@@ -12,11 +12,12 @@ export const firebaseConfig = {
 
 // Team members
 export const TEAM = [
-  { email: 'gyan@publicknowledge.co', name: 'Gyan', color: '#4f46e5' },
-  { email: 'charu@publicknowledge.co', name: 'Charu', color: '#0891b2' },
-  { email: 'sharang@publicknowledge.co', name: 'Sharang', color: '#c026d3' },
-  { email: 'anandu@publicknowledge.co', name: 'Anandu', color: '#ea580c' },
-  { email: 'asty@publicknowledge.co', name: 'Asty', color: '#10b981' },
+  { email: 'gyan@publicknowledge.co', name: 'Gyan', color: '#4f46e5', role: 'admin', joinDate: '2026-03-01' },
+  { email: 'charu@publicknowledge.co', name: 'Charu', color: '#0891b2', role: 'admin', joinDate: '2026-03-01' },
+  { email: 'sharang@publicknowledge.co', name: 'Sharang', color: '#c026d3', role: 'member', joinDate: '2026-03-01' },
+  { email: 'anandu@publicknowledge.co', name: 'Anandu', color: '#ea580c', role: 'member', joinDate: '2026-03-01' },
+  { email: 'mohit@publicknowledge.co', name: 'Mohit', color: '#059669', role: 'member', joinDate: '2026-03-16' },
+  { email: 'rakesh@publicknowledge.co', name: 'Rakesh', color: '#d97706', role: 'member', joinDate: '2026-04-01' },
 ]
 
 // Task statuses and their display config
@@ -34,3 +35,20 @@ export const PRIORITIES = [
   { id: 'high', label: 'High', color: '#f59e0b' },
   { id: 'urgent', label: 'Urgent', color: '#ef4444' },
 ]
+
+export const ATTENDANCE_STATUSES = [
+  { id: 'wfo', label: 'Working from Office', color: '#22c55e' },
+  { id: 'wfh', label: 'Working from Home', color: '#22c55e' },
+  { id: 'half_day', label: 'Half Day', color: '#eab308' },
+  { id: 'medical_leave', label: 'Medical Leave', color: '#ef4444' },
+  { id: 'personal_leave', label: 'Personal Leave', color: '#ef4444' },
+  { id: 'unpaid_leave', label: 'Unpaid Leave', color: '#ef4444' },
+]
+
+export function isAdmin(email) {
+  return TEAM.find(m => m.email === email)?.role === 'admin'
+}
+
+export function getAttendanceTeam() {
+  return TEAM.filter(m => m.joinDate)
+}

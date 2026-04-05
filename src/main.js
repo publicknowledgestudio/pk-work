@@ -15,7 +15,6 @@ import { renderMyDay } from './my-day.js'
 import { renderStandup } from './standup.js'
 import { renderClients, cleanupClients } from './clients.js'
 import { renderPeople, cleanupPeople } from './people.js'
-import { renderWiki, cleanupWiki } from './wiki.js'
 import { renderReferences, cleanupReferences } from './references.js'
 import { renderTimesheets } from './timesheets.js'
 import { openModal } from './modal.js'
@@ -23,6 +22,12 @@ import { initContextMenu } from './context-menu.js'
 import { setAccessToken, clearAccessToken } from './calendar.js'
 import { renderClientBoard } from './client-board.js'
 import { renderClientTimesheets } from './client-timesheets.js'
+import { renderAttendance, cleanupAttendance } from './attendance.js'
+
+// Preload cached image URLs into browser HTTP cache
+try {
+  JSON.parse(localStorage.getItem('pk-img-urls') || '[]').forEach((u) => { new Image().src = u })
+} catch (_) {}
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig)
@@ -54,17 +59,18 @@ const ROUTES = {
   '/standup':       { view: 'standup' },
   '/timesheets':    { view: 'timesheets' },
   '/people':        { view: 'people' },
-  '/wiki':          { view: 'wiki' },
   '/references':    { view: 'references' },
   '/manage':        { view: 'clients' },
+  '/attendance':        { view: 'attendance' },
   '/client-board':      { view: 'client-board' },
   '/client-timesheets': { view: 'client-timesheets' },
 }
 
 const VIEW_TO_PATH = {
   'my-day': '/my-day', 'my-tasks': '/my-tasks', 'standup': '/standup',
-  'timesheets': '/timesheets', 'people': '/people', 'wiki': '/wiki',
+  'timesheets': '/timesheets', 'people': '/people',
   'references': '/references', 'clients': '/manage',
+  'attendance': '/attendance',
   'client-board': '/client-board', 'client-timesheets': '/client-timesheets',
 }
 const BOARD_TO_PATH = {
@@ -93,6 +99,7 @@ function handleRouteChange() {
 
   // Sync nav-tab active state
   navTabs.forEach((t) => t.classList.toggle('active', t.dataset.view === currentView))
+  if (typeof syncMobileNav === 'function') syncMobileNav()
 
   if (currentUser) renderCurrentView()
 }
@@ -127,11 +134,8 @@ initContextMenu(() => ({
   db, currentUser, clients, projects, allTasks, onSave: renderCurrentView,
 }))
 
-// Status icon cycle click (delegated globally)
-const STATUS_CYCLE = ['todo', 'in_progress', 'review', 'done']
-let statusToastTimer = null
-let statusToastTaskId = null
-let statusOriginal = null // status before first click in a burst
+// Status icon click — mark done immediately, toast lets you pick a different state
+const STATUS_OPTIONS = ['todo', 'in_progress', 'review', 'done']
 
 document.addEventListener('click', async (e) => {
   const btn = e.target.closest('[data-action="cycle-status"]')
@@ -139,42 +143,25 @@ document.addEventListener('click', async (e) => {
   e.stopPropagation()
   e.preventDefault()
 
-  // Find the task card ancestor (data-id for my-day cards, data-task-id for time grid blocks)
   const card = btn.closest('[data-id]') || btn.closest('[data-task-id]')
   if (!card) return
   const taskId = card.dataset.id || card.dataset.taskId
   const task = allTasks.find((t) => t.id === taskId)
   if (!task) return
 
-  // Capture original status on first click of a burst
-  if (!statusToastTimer || statusToastTaskId !== taskId) {
-    statusOriginal = task.status
-  }
+  const previousStatus = task.status
 
-  const idx = STATUS_CYCLE.indexOf(task.status)
-  const nextStatus = STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length]
+  // If already done, toggle back to todo
+  const newStatus = task.status === 'done' ? 'todo' : 'done'
 
   btn.disabled = true
-  await updateTask(db, taskId, { status: nextStatus })
+  await updateTask(db, taskId, { status: newStatus })
 
-  // Debounced toast — wait 500ms after last click to show final status
-  if (statusToastTimer) clearTimeout(statusToastTimer)
-  statusToastTaskId = taskId
-  const origForUndo = statusOriginal
-  statusToastTimer = setTimeout(() => {
-    const freshTask = allTasks.find((t) => t.id === statusToastTaskId)
-    if (freshTask) {
-      const statusLabel = STATUSES.find((s) => s.id === freshTask.status)?.label || freshTask.status
-      showStatusToast(freshTask.title, statusLabel, statusToastTaskId, origForUndo)
-    }
-    statusToastTimer = null
-    statusToastTaskId = null
-    statusOriginal = null
-  }, 500)
+  showStatusToast(task.title, newStatus, taskId, previousStatus)
 })
 
-// Status toast with Undo
-function showStatusToast(title, statusLabel, taskId, previousStatus) {
+// Status toast with status change options
+function showStatusToast(title, currentStatus, taskId, previousStatus) {
   let toast = document.getElementById('status-toast')
   if (!toast) {
     toast = document.createElement('div')
@@ -183,25 +170,43 @@ function showStatusToast(title, statusLabel, taskId, previousStatus) {
     document.body.appendChild(toast)
   }
 
-  const prevLabel = STATUSES.find((s) => s.id === previousStatus)?.label || previousStatus
+  const statusLabel = STATUSES.find((s) => s.id === currentStatus)?.label || currentStatus
+
+  const statusBtns = STATUS_OPTIONS
+    .filter((s) => s !== currentStatus)
+    .map((s) => {
+      const label = STATUSES.find((st) => st.id === s)?.label || s
+      return `<button class="status-toast-option" data-status="${s}">${label}</button>`
+    })
+    .join('')
+
   toast.innerHTML = `
     <span class="status-toast-msg">${esc(title)} → <strong>${statusLabel}</strong></span>
-    <button class="status-toast-undo" id="status-toast-undo">Undo</button>
+    <div class="status-toast-actions">
+      ${statusBtns}
+    </div>
   `
   toast.classList.remove('hide')
   toast.classList.add('show')
 
-  // Wire undo
-  const undoBtn = toast.querySelector('#status-toast-undo')
-  undoBtn.addEventListener('click', async () => {
-    undoBtn.disabled = true
-    undoBtn.textContent = '...'
-    await updateTask(db, taskId, { status: previousStatus })
-    toast.classList.remove('show')
-    toast.classList.add('hide')
+  // Wire status change buttons
+  toast.querySelectorAll('.status-toast-option').forEach((optBtn) => {
+    optBtn.addEventListener('click', async () => {
+      optBtn.disabled = true
+      optBtn.textContent = '...'
+      await updateTask(db, taskId, { status: optBtn.dataset.status })
+      const newLabel = STATUSES.find((s) => s.id === optBtn.dataset.status)?.label || optBtn.dataset.status
+      toast.querySelector('.status-toast-msg').innerHTML = `${esc(title)} → <strong>${newLabel}</strong>`
+      // Refresh toast timer
+      clearTimeout(toast._hideTimer)
+      toast._hideTimer = setTimeout(() => {
+        toast.classList.remove('show')
+        toast.classList.add('hide')
+      }, 3000)
+    })
   })
 
-  // Auto-hide after 4s (longer to give time to undo)
+  // Auto-hide after 4s
   clearTimeout(toast._hideTimer)
   toast._hideTimer = setTimeout(() => {
     toast.classList.remove('show')
@@ -209,19 +214,13 @@ function showStatusToast(title, statusLabel, taskId, previousStatus) {
   }, 4000)
 }
 
-// Auth
+// Auth — basic login (no extra scopes, avoids "unverified app" warning)
 const provider = new GoogleAuthProvider()
 provider.setCustomParameters({ prompt: 'select_account' })
-provider.addScope('https://www.googleapis.com/auth/calendar.events.readonly')
 
 loginBtn.addEventListener('click', async () => {
   try {
-    const result = await signInWithPopup(auth, provider)
-    // Capture Google OAuth access token for Calendar API
-    const credential = GoogleAuthProvider.credentialFromResult(result)
-    if (credential?.accessToken) {
-      setAccessToken(credential.accessToken)
-    }
+    await signInWithPopup(auth, provider)
   } catch (err) {
     if (err.code !== 'auth/popup-closed-by-user') {
       console.error('Login error:', err)
@@ -234,10 +233,37 @@ logoutBtn.addEventListener('click', () => {
   signOut(auth)
 })
 
-// Re-authenticate to get a fresh Google Calendar access token
+// User menu dropdown
+const userMenuTrigger = document.getElementById('user-menu-trigger')
+const userMenuDropdown = document.getElementById('user-menu-dropdown')
+const userMenu = document.getElementById('user-menu')
+
+userMenuTrigger.addEventListener('click', () => {
+  userMenuDropdown.classList.toggle('hidden')
+  userMenu.classList.toggle('open')
+})
+
+document.addEventListener('mousedown', (e) => {
+  if (!userMenu.contains(e.target) && !userMenuDropdown.classList.contains('hidden')) {
+    userMenuDropdown.classList.add('hidden')
+    userMenu.classList.remove('open')
+  }
+})
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !userMenuDropdown.classList.contains('hidden')) {
+    userMenuDropdown.classList.add('hidden')
+    userMenu.classList.remove('open')
+  }
+})
+
+// Separate provider with calendar scope — only used when team members connect calendar
+const calendarProvider = new GoogleAuthProvider()
+calendarProvider.addScope('https://www.googleapis.com/auth/calendar.events.readonly')
+
 export async function reconnectCalendar() {
   try {
-    const result = await signInWithPopup(auth, provider)
+    const result = await signInWithPopup(auth, calendarProvider)
     const credential = GoogleAuthProvider.credentialFromResult(result)
     if (credential?.accessToken) {
       setAccessToken(credential.accessToken)
@@ -267,10 +293,26 @@ onAuthStateChanged(auth, async (user) => {
         userRole = 'client'
         userClientId = clientUserDoc.clientId
       } else {
-        // Not authorized — sign out
+        // Not authorized — show denial screen and sign out
         userRole = null
-        const loginNote = document.querySelector('.login-note')
-        if (loginNote) loginNote.textContent = 'Access denied. Contact your project manager for an invitation.'
+        const loginCard = document.querySelector('.login-card')
+        if (loginCard) {
+          loginCard.innerHTML = `
+            <div class="login-denied">
+              <div class="login-denied-icon"><i class="ph ph-lock-simple"></i></div>
+              <h2>No access</h2>
+              <p>The account <strong>${user.email}</strong> doesn't have access to this workspace.</p>
+              <p>If you think you should have access, contact <a href="mailto:team@publicknowledge.co">team@publicknowledge.co</a></p>
+              <button class="btn-google" id="login-denied-back">
+                <i class="ph ph-arrow-left"></i>
+                Try a different account
+              </button>
+            </div>
+          `
+          document.getElementById('login-denied-back')?.addEventListener('click', () => {
+            location.reload()
+          })
+        }
         await signOut(auth)
         return
       }
@@ -299,6 +341,15 @@ onAuthStateChanged(auth, async (user) => {
       userAvatar.style.background = member?.color || '#6b7280'
     }
 
+    // Populate user menu dropdown info
+    const userMenuInfo = document.getElementById('user-menu-info')
+    if (userMenuInfo) {
+      userMenuInfo.innerHTML = `
+        <div class="user-menu-name">${esc(user.displayName || member?.name || '')}</div>
+        <div class="user-menu-email">${esc(user.email)}</div>
+      `
+    }
+
     // Load all user profiles and apply photos to TEAM members
     if (userRole === 'team') {
       const profiles = await loadUserProfiles(db)
@@ -320,6 +371,15 @@ onAuthStateChanged(auth, async (user) => {
     }
     populateFilters()
 
+    // Save image URLs for preloading on next visit
+    try {
+      const urls = [
+        ...clients.map((c) => c.logoUrl),
+        ...TEAM.map((m) => m.photoURL),
+      ].filter(Boolean)
+      localStorage.setItem('pk-img-urls', JSON.stringify(urls))
+    } catch (_) {}
+
     // Resolve client name for client users
     if (userRole === 'client' && userClientId) {
       const clientDoc = clients.find((c) => c.id === userClientId)
@@ -330,14 +390,17 @@ onAuthStateChanged(auth, async (user) => {
     if (userRole === 'client') {
       // Update header logo
       const headerLogo = document.querySelector('.header-logo')
-      if (headerLogo) headerLogo.innerHTML = `PK<span class="header-logo-dot">.</span> <span class="header-logo-client">for ${esc(userClientName)}</span>`
+      if (headerLogo) headerLogo.textContent = 'PK Work'
 
       // Hide team-only nav tabs
       navTabs.forEach((tab) => {
         const view = tab.dataset.view
-        const teamOnlyViews = ['my-day', 'my-tasks', 'board', 'standup', 'timesheets', 'people', 'wiki', 'references', 'clients']
+        const teamOnlyViews = ['my-day', 'my-tasks', 'board', 'standup', 'timesheets', 'people', 'references', 'clients', 'attendance']
         if (teamOnlyViews.includes(view)) tab.style.display = 'none'
       })
+
+      // Hide mobile bottom nav for client users
+      if (mobileBottomNav) mobileBottomNav.style.display = 'none'
 
       // Show client nav tabs
       document.querySelectorAll('.client-nav').forEach((tab) => {
@@ -381,6 +444,7 @@ onAuthStateChanged(auth, async (user) => {
     cleanupPeople()
     cleanupWiki()
     cleanupReferences()
+    cleanupAttendance()
   }
 })
 
@@ -388,6 +452,52 @@ onAuthStateChanged(auth, async (user) => {
 navTabs.forEach((tab) => {
   tab.addEventListener('click', () => navigateTo(tab.dataset.view))
 })
+
+// Mobile bottom nav
+const mobileBottomNav = document.getElementById('mobile-bottom-nav')
+const mobileMoreSheet = document.getElementById('mobile-more-sheet')
+const mobileMoreOverlay = document.getElementById('mobile-more-overlay')
+const mobileMoreClose = document.getElementById('mobile-more-close')
+
+// Bottom nav tab clicks
+mobileBottomNav?.querySelectorAll('.mobile-nav-btn').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    if (btn.dataset.view === 'more') {
+      mobileMoreSheet?.classList.remove('hidden')
+    } else {
+      navigateTo(btn.dataset.view)
+    }
+  })
+})
+
+// More sheet item clicks
+mobileMoreSheet?.querySelectorAll('.mobile-more-item').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    mobileMoreSheet.classList.add('hidden')
+    navigateTo(btn.dataset.view)
+  })
+})
+
+// Close more sheet
+mobileMoreOverlay?.addEventListener('click', () => mobileMoreSheet?.classList.add('hidden'))
+mobileMoreClose?.addEventListener('click', () => mobileMoreSheet?.classList.add('hidden'))
+
+// Sync mobile nav active state on route change
+function syncMobileNav() {
+  const bottomViews = ['my-day', 'board', 'standup', 'attendance']
+  mobileBottomNav?.querySelectorAll('.mobile-nav-btn').forEach((btn) => {
+    if (btn.dataset.view === 'more') {
+      // "More" is active when current view isn't one of the bottom bar views
+      btn.classList.toggle('active', !bottomViews.includes(currentView))
+    } else {
+      btn.classList.toggle('active', btn.dataset.view === currentView)
+    }
+  })
+  // Sync more sheet active states
+  mobileMoreSheet?.querySelectorAll('.mobile-more-item').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.view === currentView)
+  })
+}
 
 // Filters
 filterAssignee.addEventListener('change', renderCurrentView)
@@ -612,8 +722,8 @@ function renderCurrentView() {
   // Clean up subscriptions when leaving views
   if (currentView !== 'clients') cleanupClients()
   if (currentView !== 'people') cleanupPeople()
-  if (currentView !== 'wiki') cleanupWiki()
-  if (currentView !== 'references') cleanupReferences()
+if (currentView !== 'references') cleanupReferences()
+  if (currentView !== 'attendance') cleanupAttendance()
 
   switch (currentView) {
     case 'board':
@@ -634,14 +744,14 @@ function renderCurrentView() {
     case 'people':
       renderPeople(mainContent, ctx)
       break
-    case 'wiki':
-      renderWiki(mainContent, ctx)
-      break
     case 'references':
       renderReferences(mainContent, ctx)
       break
     case 'timesheets':
       renderTimesheets(mainContent, allTasks, ctx)
+      break
+    case 'attendance':
+      renderAttendance(mainContent, ctx)
       break
     case 'client-board':
       renderClientBoard(mainContent, tasks, { ...ctx, userClientId, userClientName })

@@ -11,6 +11,8 @@ let tomorrowTaskIds = []
 let todayStr = ''
 let tomorrowStr = ''
 let viewingEmail = '' // email of the person whose day we're viewing
+let calendarDate = null // null = today, or a Date object for a different day
+let selectedClientId = '' // '' = all clients
 
 export async function renderMyDay(container, tasks, currentUser, ctx) {
   const myEmail = currentUser?.email
@@ -33,11 +35,11 @@ export async function renderMyDay(container, tasks, currentUser, ctx) {
   tomorrowTaskIds = tomorrowData.taskIds
 
   // Filter out stale IDs (tasks that no longer exist) — keep done tasks so they persist on the calendar
-  const validFocusIds = focusTaskIds.filter((id) => {
-    const t = tasks.find((task) => task.id === id)
-    return !!t
-  })
-  if (validFocusIds.length !== focusTaskIds.length && isOwnDay) {
+  // Skip cleanup if tasks haven't loaded yet (empty array) to avoid wiping valid focus data
+  const validFocusIds = tasks.length > 0
+    ? focusTaskIds.filter((id) => tasks.find((task) => task.id === id))
+    : focusTaskIds
+  if (tasks.length > 0 && validFocusIds.length !== focusTaskIds.length && isOwnDay) {
     focusTaskIds = validFocusIds
     // Also clean time blocks for removed tasks
     const focusSet = new Set(focusTaskIds)
@@ -50,11 +52,14 @@ export async function renderMyDay(container, tasks, currentUser, ctx) {
     .filter(Boolean)
 
   // Filter stale tomorrow IDs — remove done tasks from tomorrow (already completed)
-  const validTomorrowIds = tomorrowTaskIds.filter((id) => {
-    const t = tasks.find((task) => task.id === id)
-    return t && t.status !== 'done'
-  })
-  if (validTomorrowIds.length !== tomorrowTaskIds.length && isOwnDay) {
+  // Skip cleanup if tasks haven't loaded yet
+  const validTomorrowIds = tasks.length > 0
+    ? tomorrowTaskIds.filter((id) => {
+        const t = tasks.find((task) => task.id === id)
+        return t && t.status !== 'done'
+      })
+    : tomorrowTaskIds
+  if (tasks.length > 0 && validTomorrowIds.length !== tomorrowTaskIds.length && isOwnDay) {
     tomorrowTaskIds = validTomorrowIds
     saveDailyFocus(ctx.db, targetEmail, tomorrowStr, tomorrowTaskIds)
   }
@@ -62,15 +67,14 @@ export async function renderMyDay(container, tasks, currentUser, ctx) {
     .map((id) => tasks.find((t) => t.id === id))
     .filter(Boolean)
 
-  // Up Next: active tasks not in focus or tomorrow for viewed user
-  const focusSet = new Set(focusTaskIds)
+  // Up Next: active tasks not in tomorrow for viewed user
+  // Note: tasks scheduled on the calendar stay in Up Next (with a scheduled badge)
   const tomorrowSet = new Set(tomorrowTaskIds)
   const upNext = tasks
     .filter((t) =>
       (t.assignees || []).includes(targetEmail) &&
       t.status !== 'done' &&
       t.status !== 'backlog' &&
-      !focusSet.has(t.id) &&
       !tomorrowSet.has(t.id)
     )
     .sort((a, b) => priorityWeight(b.priority) - priorityWeight(a.priority))
@@ -83,11 +87,28 @@ export async function renderMyDay(container, tasks, currentUser, ctx) {
     return closed >= todayStart
   })
 
+  // Determine the calendar date (default: today)
+  const calDate = calendarDate || now
+  const calDateStr = calDate.toISOString().split('T')[0]
+  const isCalToday = calDateStr === todayStr
+
+  // Load focus data for the calendar date (if different from today)
+  let calFocusTaskIds = focusTaskIds
+  let calTimeBlocks = timeBlocks
+  if (!isCalToday) {
+    const calFocusData = await loadDailyFocus(ctx.db, targetEmail, calDateStr)
+    calFocusTaskIds = calFocusData.taskIds
+    calTimeBlocks = calFocusData.timeBlocks
+  }
+  const calFocusTasks = calFocusTaskIds
+    .map((id) => tasks.find((t) => t.id === id))
+    .filter(Boolean)
+
   // Load calendar events (only for own day)
   let calendarEvents = []
   let calendarNeedsAuth = false
   if (isOwnDay) {
-    const cal = await loadCalendarEvents(todayStr)
+    const cal = await loadCalendarEvents(calDateStr)
     calendarEvents = cal.events
     calendarNeedsAuth = cal.needsAuth
   }
@@ -97,99 +118,148 @@ export async function renderMyDay(container, tasks, currentUser, ctx) {
 
   const greetingText = isOwnDay
     ? `${greeting()}, ${esc(viewingName.split(' ')[0])}`
-    : `${esc(viewingName.split(' ')[0])}'s Day`
+    : `${esc(viewingName.split(' ')[0])}'s Week`
+
+  // Build client filter data — count only tasks visible in sections
+  const visibleTasks = [...upNext, ...tomorrowTasks, ...completedToday]
+  const clientCounts = new Map() // clientId → count
+  for (const t of visibleTasks) {
+    const cid = t.clientId || ''
+    clientCounts.set(cid, (clientCounts.get(cid) || 0) + 1)
+  }
+  const totalActiveCount = visibleTasks.length
+  // Only show clients that have tasks
+  const activeClients = ctx.clients
+    .filter((c) => clientCounts.has(c.id))
+    .sort((a, b) => (clientCounts.get(b.id) || 0) - (clientCounts.get(a.id) || 0))
+
+  // If selected client no longer has tasks, reset to all
+  if (selectedClientId && !clientCounts.has(selectedClientId)) {
+    selectedClientId = ''
+  }
+
+  // Filter task lists by selected client
+  const clientFilter = (t) => !selectedClientId || t.clientId === selectedClientId
+  const filteredUpNext = upNext.filter(clientFilter)
+  const filteredTomorrowTasks = tomorrowTasks.filter(clientFilter)
+  const filteredCompletedToday = completedToday.filter(clientFilter)
 
   // Split events
   const allDayEvents = calendarEvents.filter((e) => e.allDay)
   const timedEvents = calendarEvents.filter((e) => !e.allDay)
   const scheduledCount = timeBlocks.length
 
+  // Build scheduled set for badges
+  const scheduledSet = new Set(timeBlocks.map((b) => b.taskId))
+
   container.innerHTML = `
     <div class="my-day">
-      <div class="my-day-header">
-        <div>
-          <div class="my-day-greeting-row">
-            <h2 class="my-day-greeting">${greetingText}</h2>
-            <button class="myday-person-toggle" id="myday-person-toggle" title="View another person's day">
-              <i class="ph-fill ph-caret-down"></i>
-            </button>
+      <div class="my-day-left">
+        <div class="my-day-header">
+          <div>
+            <div class="my-day-greeting-row">
+              <h2 class="my-day-greeting">${greetingText}</h2>
+              <button class="myday-person-toggle" id="myday-person-toggle" title="View another person's day">
+                <i class="ph-fill ph-caret-down"></i>
+              </button>
+            </div>
+            <p class="my-day-date">${formatDate(now)}</p>
           </div>
-          <p class="my-day-date">${formatDate(now)}</p>
+          <div class="my-day-stats">
+            <span class="my-day-stat"><i class="ph-fill ph-target"></i> ${focusTasks.length} planned</span>
+            <span class="my-day-stat"><i class="ph-fill ph-check-circle"></i> ${completedToday.length} done today</span>
+          </div>
         </div>
-        <div class="my-day-stats">
-          <span class="my-day-stat"><i class="ph-fill ph-target"></i> ${focusTasks.length} planned</span>
-          <span class="my-day-stat"><i class="ph-fill ph-check-circle"></i> ${completedToday.length} done today</span>
+
+        ${activeClients.length > 0 ? `
+        <div class="my-week-client-tabs" id="my-week-client-tabs">
+          <button class="client-tab${selectedClientId === '' ? ' active' : ''}" data-client-id="">
+            <span class="client-tab-logos">${activeClients.slice(0, 3).map((c) =>
+              c.logoUrl
+                ? `<img class="client-tab-logo" src="${c.logoUrl}" alt="${esc(c.name)}">`
+                : `<span class="client-tab-logo client-tab-logo-placeholder">${c.name[0]}</span>`
+            ).join('')}</span>
+            <span class="client-tab-label">All Clients</span>
+            <span class="client-tab-count">${totalActiveCount}</span>
+          </button>
+          ${activeClients.map((c) => `
+            <button class="client-tab${selectedClientId === c.id ? ' active' : ''}" data-client-id="${c.id}">
+              ${c.logoUrl
+                ? `<img class="client-tab-logo" src="${c.logoUrl}" alt="${esc(c.name)}">`
+                : `<span class="client-tab-logo client-tab-logo-placeholder">${c.name[0]}</span>`
+              }
+              <span class="client-tab-label">${esc(c.name)}</span>
+              <span class="client-tab-count">${clientCounts.get(c.id) || 0}</span>
+            </button>
+          `).join('')}
         </div>
+        ` : ''}
+
+        <!-- Unscheduled Section -->
+        <div class="my-day-section">
+          <div class="my-day-section-header">
+            <i class="ph-fill ph-queue" style="color:#3b82f6"></i>
+            <span>Unscheduled</span>
+            <span class="my-day-count">${filteredUpNext.length}</span>
+          </div>
+          <div class="my-day-upnext-list" data-drop="upnext">
+            ${filteredUpNext.length > 0 ? filteredUpNext.map((t) => upNextCard(t, ctx, now, isOwnDay, scheduledSet.has(t.id))).join('') : `
+              <div class="my-day-empty">
+                <i class="ph ph-check" style="font-size:24px;opacity:0.3"></i>
+                <span>${isOwnDay ? "No active tasks — you're all caught up" : 'No active tasks'}</span>
+              </div>
+            `}
+          </div>
+        </div>
+
+        <!-- Tomorrow Section -->
+        <div class="my-day-section">
+          <div class="my-day-section-header">
+            <i class="ph-fill ph-calendar-plus" style="color:#6366f1"></i>
+            <span>Tomorrow</span>
+            <span class="my-day-count">${filteredTomorrowTasks.length}</span>
+          </div>
+          <div class="my-day-tomorrow-list" data-drop="tomorrow">
+            ${filteredTomorrowTasks.length > 0 ? filteredTomorrowTasks.map((t) => tomorrowCard(t, ctx, now, isOwnDay)).join('') : `
+              <div class="my-day-empty">
+                <i class="ph ph-calendar-blank" style="font-size:24px;opacity:0.3"></i>
+                <span>${isOwnDay ? 'Plan ahead — drag or add tasks for tomorrow' : 'Nothing planned for tomorrow'}</span>
+              </div>
+            `}
+          </div>
+        </div>
+
+        <!-- Completed Today -->
+        ${filteredCompletedToday.length > 0 ? `
+          <div class="my-day-section">
+            <div class="my-day-section-header">
+              <i class="ph-fill ph-check-circle" style="color:#22c55e"></i>
+              <span>Completed Today</span>
+              <span class="my-day-count">${filteredCompletedToday.length}</span>
+            </div>
+            <div class="my-day-completed-list">
+              ${filteredCompletedToday.map((t) => completedCard(t, ctx, now)).join('')}
+            </div>
+          </div>
+        ` : ''}
+
+        <div class="myday-add-spacer"></div>
       </div>
 
-      <!-- Time-Block Calendar -->
-      <div class="my-day-section">
-        <div class="my-day-section-header">
-          <i class="ph-fill ph-sun" style="color:#f59e0b"></i>
-          <span>My Day</span>
-          ${scheduledCount > 0 ? `<span class="my-day-count">${scheduledCount} scheduled</span>` : ''}
-        </div>
+      <div class="my-day-right">
         ${renderTimeGrid({
-          timeBlocks,
-          focusTasks,
+          timeBlocks: calTimeBlocks,
+          focusTasks: calFocusTasks,
           calendarEvents: timedEvents,
           allDayEvents,
           calendarNeedsAuth,
           isOwnDay,
           ctx,
           now,
+          calendarDate: calDate,
+          isToday: isCalToday,
         })}
       </div>
-
-      <!-- Up Next Section -->
-      <div class="my-day-section">
-        <div class="my-day-section-header">
-          <i class="ph-fill ph-queue" style="color:#3b82f6"></i>
-          <span>Up Next</span>
-          <span class="my-day-count">${upNext.length}</span>
-        </div>
-        <div class="my-day-upnext-list" data-drop="upnext">
-          ${upNext.length > 0 ? upNext.map((t) => upNextCard(t, ctx, now, isOwnDay)).join('') : `
-            <div class="my-day-empty">
-              <i class="ph ph-check" style="font-size:24px;opacity:0.3"></i>
-              <span>${isOwnDay ? "No active tasks — you're all caught up" : 'No active tasks'}</span>
-            </div>
-          `}
-        </div>
-      </div>
-
-      <!-- Tomorrow Section -->
-      <div class="my-day-section">
-        <div class="my-day-section-header">
-          <i class="ph-fill ph-calendar-plus" style="color:#6366f1"></i>
-          <span>Tomorrow</span>
-          <span class="my-day-count">${tomorrowTasks.length}</span>
-        </div>
-        <div class="my-day-tomorrow-list" data-drop="tomorrow">
-          ${tomorrowTasks.length > 0 ? tomorrowTasks.map((t) => tomorrowCard(t, ctx, now, isOwnDay)).join('') : `
-            <div class="my-day-empty">
-              <i class="ph ph-calendar-blank" style="font-size:24px;opacity:0.3"></i>
-              <span>${isOwnDay ? 'Plan ahead — drag or add tasks for tomorrow' : 'Nothing planned for tomorrow'}</span>
-            </div>
-          `}
-        </div>
-      </div>
-
-      <!-- Completed Today -->
-      ${completedToday.length > 0 ? `
-        <div class="my-day-section">
-          <div class="my-day-section-header">
-            <i class="ph-fill ph-check-circle" style="color:#22c55e"></i>
-            <span>Completed Today</span>
-            <span class="my-day-count">${completedToday.length}</span>
-          </div>
-          <div class="my-day-completed-list">
-            ${completedToday.map((t) => completedCard(t, ctx, now)).join('')}
-          </div>
-        </div>
-      ` : ''}
-
-      <div class="myday-add-spacer"></div>
     </div>
 
     <div class="myday-add-bar">
@@ -204,16 +274,19 @@ export async function renderMyDay(container, tasks, currentUser, ctx) {
 
 // ── Card renderers ──
 
-function upNextCard(task, ctx, now, isOwnDay) {
+function upNextCard(task, ctx, now, isOwnDay, isScheduled) {
   const project = ctx.projects.find((p) => p.id === task.projectId)
   const client = ctx.clients.find((c) => c.id === task.clientId)
   const clientLogo = client?.logoUrl
     ? `<img class="client-logo-xs" src="${client.logoUrl}" alt="${esc(client.name)}">`
     : ''
   const deadlineHtml = deadlineTag(task, now)
+  const scheduledBadge = isScheduled
+    ? '<span class="my-day-scheduled-badge" title="Scheduled on calendar"><i class="ph-fill ph-clock"></i></span>'
+    : ''
 
   return `
-    <div class="my-day-card upnext" data-id="${task.id}" draggable="${isOwnDay}">
+    <div class="my-day-card upnext${isScheduled ? ' scheduled' : ''}" data-id="${task.id}" draggable="${isOwnDay}">
       <div class="my-day-card-main">
         ${statusIcon(task.status)}
         ${task.priority === 'urgent' ? '<i class="ph-fill ph-warning urgent-icon"></i>' : ''}
@@ -221,10 +294,11 @@ function upNextCard(task, ctx, now, isOwnDay) {
         ${project ? `<span class="my-day-project">${esc(project.name)}</span>` : ''}
         <span class="my-day-card-title">${esc(task.title)}</span>
         <div class="my-day-card-meta">
+          ${scheduledBadge}
           ${deadlineHtml}
         </div>
       </div>
-      ${isOwnDay ? `
+      ${isOwnDay && !isScheduled ? `
       <div class="my-day-card-actions">
         <button class="my-day-action-btn add-focus" data-action="focus" data-id="${task.id}" title="Add to today's focus">
           <i class="ph ph-plus-circle"></i>
@@ -301,11 +375,48 @@ function bindMyDayActions(container, tasks, currentUser, ctx, now, isOwnDay) {
   const myEmail = currentUser?.email
   const targetEmail = viewingEmail || myEmail
 
+  // Client filter tabs
+  container.querySelectorAll('.client-tab').forEach((tab) => {
+    tab.addEventListener('click', () => {
+      selectedClientId = tab.dataset.clientId
+      renderMyDay(container, tasks, currentUser, ctx)
+    })
+  })
+
   // Person picker popover
   const toggleBtn = container.querySelector('#myday-person-toggle')
   if (toggleBtn) {
     toggleBtn.addEventListener('click', () => {
       openPersonPicker(container, tasks, currentUser, ctx, targetEmail, myEmail)
+    })
+  }
+
+  // Day navigation buttons
+  const dayPrev = container.querySelector('#tg-day-prev')
+  const dayNext = container.querySelector('#tg-day-next')
+  const dayLabel = container.querySelector('#tg-day-label')
+  if (dayPrev) {
+    dayPrev.addEventListener('click', () => {
+      const base = calendarDate || new Date()
+      const prev = new Date(base)
+      prev.setDate(prev.getDate() - 1)
+      calendarDate = prev
+      renderMyDay(container, tasks, currentUser, ctx)
+    })
+  }
+  if (dayNext) {
+    dayNext.addEventListener('click', () => {
+      const base = calendarDate || new Date()
+      const next = new Date(base)
+      next.setDate(next.getDate() + 1)
+      calendarDate = next
+      renderMyDay(container, tasks, currentUser, ctx)
+    })
+  }
+  if (dayLabel) {
+    dayLabel.addEventListener('click', () => {
+      calendarDate = null // reset to today
+      renderMyDay(container, tasks, currentUser, ctx)
     })
   }
 
@@ -327,7 +438,7 @@ function bindMyDayActions(container, tasks, currentUser, ctx, now, isOwnDay) {
     isOwnDay,
     ctx: { ...ctx, currentUser },
     onTaskClick: (task) => openModal(task, ctx),
-    onSave: async (action, taskId, start, end) => {
+    onSave: async (action, taskId, start, end, newTitle) => {
       if (action === 'unschedule') {
         timeBlocks = timeBlocks.filter((b) => b.taskId !== taskId)
         await saveDailyFocus(ctx.db, myEmail, todayStr, focusTaskIds, timeBlocks)
@@ -349,6 +460,21 @@ function bindMyDayActions(container, tasks, currentUser, ctx, now, isOwnDay) {
         // Sort by start time
         timeBlocks.sort((a, b) => a.start.localeCompare(b.start))
         await saveDailyFocus(ctx.db, myEmail, todayStr, focusTaskIds, timeBlocks)
+        renderMyDay(container, tasks, currentUser, ctx)
+      } else if (action === 'new-task' && newTitle) {
+        // Create a new task and schedule it at the slot
+        const ref = await createTask(ctx.db, {
+          title: newTitle,
+          status: 'todo',
+          assignees: [targetEmail],
+          createdBy: myEmail || '',
+        })
+        if (ref && ref.id) {
+          focusTaskIds.push(ref.id)
+          timeBlocks.push({ taskId: ref.id, start, end })
+          timeBlocks.sort((a, b) => a.start.localeCompare(b.start))
+          await saveDailyFocus(ctx.db, targetEmail, todayStr, focusTaskIds, timeBlocks)
+        }
         renderMyDay(container, tasks, currentUser, ctx)
       }
     },
@@ -560,7 +686,7 @@ function openPersonPicker(container, tasks, currentUser, ctx, targetEmail, myEma
   overlay.innerHTML = `
     <div class="person-picker-sheet">
       <div class="person-picker-sheet-header">
-        <span class="person-picker-sheet-title">View someone's day</span>
+        <span class="person-picker-sheet-title">View someone's week</span>
         <button class="modal-close person-picker-close">&times;</button>
       </div>
       <div class="person-picker-sheet-list">

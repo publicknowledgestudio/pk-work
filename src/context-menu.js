@@ -77,9 +77,12 @@ function showMenu(x, y, ctx) {
       <div class="ctx-submenu" data-sub-id="assign">
         ${TEAM.map((m) => {
           const isAssigned = (task.assignees || []).includes(m.email)
+          const avatarHtml = m.photoURL
+            ? `<img class="avatar-photo-xs" src="${m.photoURL}" alt="${m.name}">`
+            : `<span class="ctx-dot" style="background:${m.color}"></span>`
           return `
             <div class="ctx-item${isAssigned ? ' active' : ''}" data-action="assign" data-value="${m.email}">
-              <span class="ctx-dot" style="background:${m.color}"></span> ${esc(m.name)}
+              ${avatarHtml} ${esc(m.name)}
               ${isAssigned ? '<i class="ph ph-check ctx-check"></i>' : ''}
             </div>
           `
