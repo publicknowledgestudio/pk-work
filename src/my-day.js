@@ -89,11 +89,11 @@ export async function renderMyDay(container, tasks, currentUser, ctx) {
   for (let i = 0; i < weekDates.length; i++) {
     const wd = weekDates[i]
     let taskIds = weekFocusResults[i].taskIds
-    // Clean stale IDs for non-today days (remove done tasks from future, keep for past/today)
+    // Clean stale IDs for non-today days (remove done/reassigned tasks from future)
     if (tasks.length > 0 && !wd.isToday && !wd.isPast && isOwnDay) {
       const cleaned = taskIds.filter((id) => {
         const t = tasks.find((task) => task.id === id)
-        return t && t.status !== 'done'
+        return t && t.status !== 'done' && (t.assignees || []).includes(targetEmail)
       })
       if (cleaned.length !== taskIds.length) {
         taskIds = cleaned
@@ -129,31 +129,12 @@ export async function renderMyDay(container, tasks, currentUser, ctx) {
     for (const id of focus.taskIds) weekTaskIdSet.add(id)
   }
 
-  // Build map of done tasks by closedAt date for this user
-  const doneByDate = new Map() // dateStr → task[]
-  for (const t of tasks) {
-    if (t.status !== 'done' || !t.closedAt) continue
-    if (!(t.assignees || []).includes(targetEmail)) continue
-    const closed = toDate(t.closedAt)
-    if (!closed) continue
-    const closedStr = closed.toISOString().split('T')[0]
-    if (!doneByDate.has(closedStr)) doneByDate.set(closedStr, [])
-    doneByDate.get(closedStr).push(t)
-  }
-
-  // Resolve week day tasks — merge scheduled + done-on-that-day
+  // Resolve week day tasks — only from dailyFocus, filtered by assignee
   const weekDayTasks = {} // dateStr → task[]
   for (const [dateStr, wd] of Object.entries(weekData)) {
-    const scheduled = wd.taskIds
+    weekDayTasks[dateStr] = wd.taskIds
       .map((id) => tasks.find((t) => t.id === id))
-      .filter(Boolean)
-    // Add tasks completed on this day that aren't already in the list
-    const scheduledIds = new Set(wd.taskIds)
-    const doneThisDay = (doneByDate.get(dateStr) || [])
-      .filter((t) => !scheduledIds.has(t.id))
-    weekDayTasks[dateStr] = [...scheduled, ...doneThisDay]
-    // Also add to weekTaskIdSet so they don't appear in Unscheduled
-    for (const t of doneThisDay) weekTaskIdSet.add(t.id)
+      .filter((t) => t && (t.assignees || []).includes(targetEmail))
   }
 
   // Up Next (Unscheduled): active tasks not assigned to any weekday
@@ -500,14 +481,14 @@ function bindMyDayActions(container, tasks, currentUser, ctx, now, isOwnDay) {
     onSave: async (action, taskId, start, end, newTitle) => {
       if (action === 'unschedule') {
         timeBlocks = timeBlocks.filter((b) => b.taskId !== taskId)
-        await saveDailyFocus(ctx.db, myEmail, todayStr, focusTaskIds, timeBlocks)
+        await saveDailyFocus(ctx.db, targetEmail, todayStr, focusTaskIds, timeBlocks)
         renderMyDay(container, tasks, currentUser, ctx)
       } else if (action === 'move') {
         // Update data + save without re-rendering (DOM is already correct from pointer events)
         timeBlocks = timeBlocks.map((b) =>
           b.taskId === taskId ? { ...b, start, end } : b
         )
-        await saveDailyFocus(ctx.db, myEmail, todayStr, focusTaskIds, timeBlocks)
+        await saveDailyFocus(ctx.db, targetEmail, todayStr, focusTaskIds, timeBlocks)
       } else if (action === 'drop' || action === 'pick') {
         // Add to focus if not already there
         if (!focusTaskIds.includes(taskId)) {
@@ -518,7 +499,7 @@ function bindMyDayActions(container, tasks, currentUser, ctx, now, isOwnDay) {
         timeBlocks.push({ taskId, start, end })
         // Sort by start time
         timeBlocks.sort((a, b) => a.start.localeCompare(b.start))
-        await saveDailyFocus(ctx.db, myEmail, todayStr, focusTaskIds, timeBlocks)
+        await saveDailyFocus(ctx.db, targetEmail, todayStr, focusTaskIds, timeBlocks)
         renderMyDay(container, tasks, currentUser, ctx)
       } else if (action === 'new-task' && newTitle) {
         // Create a new task and schedule it at the slot
@@ -556,7 +537,7 @@ function bindMyDayActions(container, tasks, currentUser, ctx, now, isOwnDay) {
       const id = btn.dataset.id
       if (!focusTaskIds.includes(id)) {
         focusTaskIds.push(id)
-        await saveDailyFocus(ctx.db, myEmail, todayStr, focusTaskIds, timeBlocks)
+        await saveDailyFocus(ctx.db, targetEmail, todayStr, focusTaskIds, timeBlocks)
         renderMyDay(container, tasks, currentUser, ctx)
       }
     })
@@ -569,7 +550,7 @@ function bindMyDayActions(container, tasks, currentUser, ctx, now, isOwnDay) {
       const id = btn.dataset.id
       focusTaskIds = focusTaskIds.filter((fid) => fid !== id)
       timeBlocks = timeBlocks.filter((b) => b.taskId !== id)
-      await saveDailyFocus(ctx.db, myEmail, todayStr, focusTaskIds, timeBlocks)
+      await saveDailyFocus(ctx.db, targetEmail, todayStr, focusTaskIds, timeBlocks)
       renderMyDay(container, tasks, currentUser, ctx)
     })
   })
@@ -587,9 +568,9 @@ function bindMyDayActions(container, tasks, currentUser, ctx, now, isOwnDay) {
       if (dateStr === todayStr) {
         focusTaskIds = focusTaskIds.filter((fid) => fid !== id)
         timeBlocks = timeBlocks.filter((b) => b.taskId !== id)
-        await saveDailyFocus(ctx.db, myEmail, todayStr, focusTaskIds, timeBlocks)
+        await saveDailyFocus(ctx.db, targetEmail, todayStr, focusTaskIds, timeBlocks)
       } else {
-        await saveDailyFocus(ctx.db, myEmail, dateStr, wd.taskIds)
+        await saveDailyFocus(ctx.db, targetEmail, dateStr, wd.taskIds)
       }
       renderMyDay(container, tasks, currentUser, ctx)
     })
@@ -688,9 +669,9 @@ function bindMyDayActions(container, tasks, currentUser, ctx, now, isOwnDay) {
           if (dateStr === todayStr) {
             focusTaskIds = focusTaskIds.filter((id) => id !== taskId)
             timeBlocks = timeBlocks.filter((b) => b.taskId !== taskId)
-            await saveDailyFocus(ctx.db, myEmail, todayStr, focusTaskIds, timeBlocks)
+            await saveDailyFocus(ctx.db, targetEmail, todayStr, focusTaskIds, timeBlocks)
           } else {
-            await saveDailyFocus(ctx.db, myEmail, dateStr, wd.taskIds)
+            await saveDailyFocus(ctx.db, targetEmail, dateStr, wd.taskIds)
           }
           changed = true
         }
@@ -703,9 +684,9 @@ function bindMyDayActions(container, tasks, currentUser, ctx, now, isOwnDay) {
           wd.taskIds.push(taskId)
           if (dropDate === todayStr) {
             focusTaskIds.push(taskId)
-            await saveDailyFocus(ctx.db, myEmail, todayStr, focusTaskIds, timeBlocks)
+            await saveDailyFocus(ctx.db, targetEmail, todayStr, focusTaskIds, timeBlocks)
           } else {
-            await saveDailyFocus(ctx.db, myEmail, dropDate, wd.taskIds)
+            await saveDailyFocus(ctx.db, targetEmail, dropDate, wd.taskIds)
           }
           changed = true
         }

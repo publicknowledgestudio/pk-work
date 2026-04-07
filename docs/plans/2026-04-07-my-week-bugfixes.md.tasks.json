@@ -1,0 +1,11 @@
+{
+  "planPath": "docs/plans/2026-04-07-my-week-bugfixes.md",
+  "tasks": [
+    {"id": 1, "subject": "Task 1: Remove closedAt merge from day sections", "status": "pending"},
+    {"id": 2, "subject": "Task 2: Add assignee filter to scheduled sections", "status": "pending", "blockedBy": [1]},
+    {"id": 3, "subject": "Task 3: Add assignee check to stale cleanup", "status": "pending"},
+    {"id": 4, "subject": "Task 4: Fix myEmail → targetEmail in all saveDailyFocus calls", "status": "pending"},
+    {"id": 5, "subject": "Task 5: Smoke test", "status": "pending", "blockedBy": [1, 2, 3, 4]}
+  ],
+  "lastUpdated": "2026-04-07T00:00:00Z"
+}
