@@ -281,10 +281,12 @@ export function renderClientTimeline(container, tasks, ctx) {
             </div>
           </div>
         ` : ''}
-        <div class="timeline-month-picker">
-          <button class="month-prev" title="Previous month"><i class="ph ph-caret-left"></i></button>
-          <button class="month-label">${monthNames[selectedMonth]} ${selectedYear}</button>
-          <button class="month-next" title="Next month"><i class="ph ph-caret-right"></i></button>
+        <div class="timeline-header">
+          <div class="month-picker">
+            <button class="month-picker-btn month-prev" title="Previous month"><i class="ph ph-caret-left"></i></button>
+            <button class="month-picker-label month-label">${monthNames[selectedMonth]} ${selectedYear}</button>
+            <button class="month-picker-btn month-next" title="Next month"><i class="ph ph-caret-right"></i></button>
+          </div>
         </div>
         <div class="timeline-board">
           <div class="timeline-col timeline-col-unscheduled">
@@ -303,7 +305,7 @@ export function renderClientTimeline(container, tasks, ctx) {
                 <span class="column-label">${col.label}</span>
                 <span class="column-count">${(buckets[col.id] || []).length}</span>
               </div>
-              <div class="column-tasks" data-col="${col.id}" data-col-type="${col.type}" data-date="${col.type === 'day' ? col.date.toISOString() : col.startDate.toISOString()}">
+              <div class="column-tasks" data-col="${col.id}" data-col-type="${col.type}" data-date="${col.type === 'day' ? col.date.toISOString().slice(0, 10) : col.startDate.toISOString().slice(0, 10)}">
                 ${(buckets[col.id] || []).map((t) => taskCard(t, ctx)).join('')}
               </div>
             </div>
