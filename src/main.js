@@ -754,7 +754,7 @@ if (currentView !== 'references') cleanupReferences()
       renderAttendance(mainContent, ctx)
       break
     case 'client-board':
-      renderClientBoard(mainContent, tasks, { ...ctx, userClientId, userClientName })
+      renderClientBoard(mainContent, tasks, { ...ctx, userClientId, userClientName, userRole })
       break
     case 'client-timesheets':
       renderClientTimesheets(mainContent, allTasks, { ...ctx, userClientId, userClientName })

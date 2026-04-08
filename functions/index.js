@@ -377,6 +377,25 @@ exports.onTaskWritten = onDocumentWritten(
       notifyOpenClaw(event.params.taskId, { ...task, projectName }, action)
     }
 
+    // Notify when an external (client) user creates a task — post to client Slack channel
+    const isNewTask = !event.data?.before?.exists
+    const createdBy = task.createdBy || ''
+    const isExternalUser = isNewTask && createdBy && !createdBy.endsWith('@publicknowledge.co')
+    if (isExternalUser && task.clientId) {
+      const [clientUserDoc, clientDoc, projectName] = await Promise.all([
+        db.collection('clientUsers').doc(createdBy).get(),
+        db.collection('clients').doc(task.clientId).get(),
+        lookupProjectName(task.projectId),
+      ])
+      const client = clientDoc.exists ? clientDoc.data() : null
+      if (client?.slackChannelId) {
+        const userName = clientUserDoc.exists ? (clientUserDoc.data().name || createdBy.split('@')[0]) : createdBy.split('@')[0]
+        const contextLine = [projectName, client.name].filter(Boolean).join(' · ')
+        const message = `📋 New task created by external user "${userName}" — ${task.title}\n${contextLine}`
+        postToSlackChannel(client.slackChannelId, message)
+      }
+    }
+
     // Notify when a task is marked as done — post to client Slack channel
     const justCompleted = task.status === 'done' && before?.status && before.status !== 'done'
     if (justCompleted) {
