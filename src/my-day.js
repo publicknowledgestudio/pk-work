@@ -352,7 +352,7 @@ export async function renderMyDay(container, tasks, currentUser, ctx) {
     </div>
   `
 
-  bindMyDayActions(container, tasks, currentUser, ctx, now, isOwnDay)
+  bindMyDayActions(container, tasks, currentUser, ctx, now, isOwnDay, { calDateStr, isCalToday, calFocusTaskIds, calTimeBlocks })
 }
 
 // ── Card renderers ──
@@ -427,7 +427,7 @@ function weekdayCard(task, ctx, now, isOwnDay, dateStr, isPast) {
 
 // ── Actions ──
 
-function bindMyDayActions(container, tasks, currentUser, ctx, now, isOwnDay) {
+function bindMyDayActions(container, tasks, currentUser, ctx, now, isOwnDay, { calDateStr, isCalToday, calFocusTaskIds, calTimeBlocks } = {}) {
   const myEmail = currentUser?.email
   const targetEmail = viewingEmail || myEmail
 
@@ -500,38 +500,41 @@ function bindMyDayActions(container, tasks, currentUser, ctx, now, isOwnDay) {
     })
   }
 
-  // Time grid interactions
+  // Time grid interactions — use calendarDate-aware focus/blocks
+  const tgDateStr = calDateStr
+  const tgIsCalToday = isCalToday
+  let tgFocusIds = tgIsCalToday ? focusTaskIds : [...calFocusTaskIds]
+  let tgBlocks = tgIsCalToday ? timeBlocks : [...calTimeBlocks]
+
   bindTimeGridActions(container, {
     tasks,
-    focusTasks: focusTaskIds.map((id) => tasks.find((t) => t.id === id)).filter(Boolean),
+    focusTasks: tgFocusIds.map((id) => tasks.find((t) => t.id === id)).filter(Boolean),
     isOwnDay,
     ctx: { ...ctx, currentUser },
     onTaskClick: (task) => openModal(task, ctx),
     onSave: async (action, taskId, start, end, newTitle) => {
       if (action === 'unschedule') {
-        timeBlocks = timeBlocks.filter((b) => b.taskId !== taskId)
-        await saveDailyFocus(ctx.db, targetEmail, todayStr, focusTaskIds, timeBlocks)
+        tgBlocks = tgBlocks.filter((b) => b.taskId !== taskId)
+        if (tgIsCalToday) { timeBlocks = tgBlocks; focusTaskIds = tgFocusIds }
+        await saveDailyFocus(ctx.db, targetEmail, tgDateStr, tgFocusIds, tgBlocks)
         renderMyDay(container, tasks, currentUser, ctx)
       } else if (action === 'move') {
-        // Update data + save without re-rendering (DOM is already correct from pointer events)
-        timeBlocks = timeBlocks.map((b) =>
+        tgBlocks = tgBlocks.map((b) =>
           b.taskId === taskId ? { ...b, start, end } : b
         )
-        await saveDailyFocus(ctx.db, targetEmail, todayStr, focusTaskIds, timeBlocks)
+        if (tgIsCalToday) { timeBlocks = tgBlocks }
+        await saveDailyFocus(ctx.db, targetEmail, tgDateStr, tgFocusIds, tgBlocks)
       } else if (action === 'drop' || action === 'pick') {
-        // Add to focus if not already there
-        if (!focusTaskIds.includes(taskId)) {
-          focusTaskIds.push(taskId)
+        if (!tgFocusIds.includes(taskId)) {
+          tgFocusIds.push(taskId)
         }
-        // Remove existing time block for this task if any
-        timeBlocks = timeBlocks.filter((b) => b.taskId !== taskId)
-        timeBlocks.push({ taskId, start, end })
-        // Sort by start time
-        timeBlocks.sort((a, b) => a.start.localeCompare(b.start))
-        await saveDailyFocus(ctx.db, targetEmail, todayStr, focusTaskIds, timeBlocks)
+        tgBlocks = tgBlocks.filter((b) => b.taskId !== taskId)
+        tgBlocks.push({ taskId, start, end })
+        tgBlocks.sort((a, b) => a.start.localeCompare(b.start))
+        if (tgIsCalToday) { timeBlocks = tgBlocks; focusTaskIds = tgFocusIds }
+        await saveDailyFocus(ctx.db, targetEmail, tgDateStr, tgFocusIds, tgBlocks)
         renderMyDay(container, tasks, currentUser, ctx)
       } else if (action === 'new-task' && newTitle) {
-        // Create a new task and schedule it at the slot
         const ref = await createTask(ctx.db, {
           title: newTitle,
           status: 'todo',
@@ -539,10 +542,11 @@ function bindMyDayActions(container, tasks, currentUser, ctx, now, isOwnDay) {
           createdBy: myEmail || '',
         })
         if (ref && ref.id) {
-          focusTaskIds.push(ref.id)
-          timeBlocks.push({ taskId: ref.id, start, end })
-          timeBlocks.sort((a, b) => a.start.localeCompare(b.start))
-          await saveDailyFocus(ctx.db, targetEmail, todayStr, focusTaskIds, timeBlocks)
+          tgFocusIds.push(ref.id)
+          tgBlocks.push({ taskId: ref.id, start, end })
+          tgBlocks.sort((a, b) => a.start.localeCompare(b.start))
+          if (tgIsCalToday) { timeBlocks = tgBlocks; focusTaskIds = tgFocusIds }
+          await saveDailyFocus(ctx.db, targetEmail, tgDateStr, tgFocusIds, tgBlocks)
         }
         renderMyDay(container, tasks, currentUser, ctx)
       }
