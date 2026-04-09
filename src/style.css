@@ -5995,3 +5995,39 @@ body {
   flex: 1;
   min-height: 120px;
 }
+
+/* ===== Week Navigation ===== */
+
+.week-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.week-nav-btn {
+  all: unset;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.week-nav-btn:hover {
+  background: var(--border);
+  color: var(--text);
+}
+
+.week-nav-label {
+  cursor: pointer;
+  border-radius: 6px;
+  padding: 0 4px;
+}
+
+.week-nav-label:hover {
+  background: var(--border);
+}
