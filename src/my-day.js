@@ -318,7 +318,7 @@ export async function renderMyDay(container, tasks, currentUser, ctx) {
             <div class="my-day-weekday-list" data-drop="weekday" data-date="${wd.dateStr}">
               ${dayTasks.length > 0 ? dayTasks.map((t) => weekdayCard(t, ctx, now, isOwnDay, wd.dateStr, wd.isPast)).join('') : `
                 <div class="my-day-empty my-day-empty-sm">
-                  ${wd.isPast ? '' : `<span>${isOwnDay ? 'Drag tasks here' : 'Nothing planned'}</span>`}
+                  <span>${isOwnDay ? 'Drag tasks here' : 'Nothing planned'}</span>
                 </div>
               `}
             </div>
