@@ -13,6 +13,9 @@ let todayStr = ''
 let viewingEmail = '' // email of the person whose day we're viewing
 let calendarDate = null // null = today, or a Date object for a different day
 let selectedClientId = '' // '' = all clients
+let weekOffset = 0 // 0 = current week, -1 = prev, +1 = next
+
+export function resetWeekOffset() { weekOffset = 0 }
 
 export async function renderMyDay(container, tasks, currentUser, ctx) {
   const myEmail = currentUser?.email
@@ -29,6 +32,7 @@ export async function renderMyDay(container, tasks, currentUser, ctx) {
   const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
   const monday = new Date(now)
   monday.setDate(now.getDate() + mondayOffset)
+  monday.setDate(monday.getDate() + (weekOffset * 7))
   const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
   const weekDates = [] // [{dateStr, label, isToday, isPast, isWeekend}]
   for (let i = 0; i < 7; i++) {
@@ -44,6 +48,12 @@ export async function renderMyDay(container, tasks, currentUser, ctx) {
       date: d,
     })
   }
+
+  const weekStartDate = weekDates[0].date
+  const weekEndDate = weekDates[6].date
+  const weekRangeStr = weekOffset === 0
+    ? formatDate(now)
+    : `${weekStartDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'long' })} – ${weekEndDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}`
 
   // Load daily focus for today + holidays in parallel
   const [focusData, allHolidays] = await Promise.all([
@@ -185,7 +195,9 @@ export async function renderMyDay(container, tasks, currentUser, ctx) {
   const viewingName = viewingMember?.name || currentUser?.displayName || ''
 
   const greetingText = isOwnDay
-    ? `${greeting()}, ${esc(viewingName.split(' ')[0])}`
+    ? (weekOffset === 0
+      ? `${greeting()}, ${esc(viewingName.split(' ')[0])}`
+      : `${esc(viewingName.split(' ')[0])}'s Week`)
     : `${esc(viewingName.split(' ')[0])}'s Week`
 
   // Build client filter data — count only tasks visible in sections
@@ -234,7 +246,11 @@ export async function renderMyDay(container, tasks, currentUser, ctx) {
                 <i class="ph-fill ph-caret-down"></i>
               </button>
             </div>
-            <p class="my-day-date">${formatDate(now)}</p>
+            <div class="my-day-date week-nav">
+              <button class="week-nav-btn" id="week-prev" title="Previous week"><i class="ph ph-caret-left"></i></button>
+              <span class="week-nav-label" id="week-label">${weekRangeStr}</span>
+              <button class="week-nav-btn" id="week-next" title="Next week"><i class="ph ph-caret-right"></i></button>
+            </div>
           </div>
           <div class="my-day-stats">
             <span class="my-day-stat"><i class="ph-fill ph-target"></i> ${focusTasks.length} planned</span>
@@ -459,6 +475,19 @@ function bindMyDayActions(container, tasks, currentUser, ctx, now, isOwnDay) {
       renderMyDay(container, tasks, currentUser, ctx)
     })
   }
+
+  document.getElementById('week-prev')?.addEventListener('click', () => {
+    weekOffset--
+    renderMyDay(container, tasks, currentUser, ctx)
+  })
+  document.getElementById('week-next')?.addEventListener('click', () => {
+    weekOffset++
+    renderMyDay(container, tasks, currentUser, ctx)
+  })
+  document.getElementById('week-label')?.addEventListener('click', () => {
+    weekOffset = 0
+    renderMyDay(container, tasks, currentUser, ctx)
+  })
 
   // Connect Calendar button
   const calConnectBtn = container.querySelector('#cal-connect-btn')
