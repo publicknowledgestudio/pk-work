@@ -249,7 +249,17 @@ async function listTasks(req, res) {
   }
 
   const snap = await q.get()
-  const tasks = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+  const tasks = snap.docs.map((d) => {
+    const data = d.data()
+    return {
+      id: d.id,
+      ...data,
+      createdAt: data.createdAt?.toDate?.()?.toISOString() || null,
+      updatedAt: data.updatedAt?.toDate?.()?.toISOString() || null,
+      closedAt: data.closedAt?.toDate?.()?.toISOString() || null,
+      deadline: data.deadline?.toDate?.()?.toISOString()?.split('T')[0] || null,
+    }
+  })
   res.json({ tasks })
 }
 
