@@ -13,6 +13,9 @@ vi.mock('./db.js', () => ({
   subscribeToProjects: vi.fn(),
   uploadClientLogo: vi.fn(),
   updateProjectContent: vi.fn(),
+  createClientUser: vi.fn(),
+  deleteClientUser: vi.fn(),
+  subscribeToClientUsers: vi.fn(),
 }))
 
 vi.mock('./markdown.js', () => ({
@@ -48,6 +51,11 @@ describe('clients.js', () => {
       projectsCallback = cb
       return vi.fn() // unsubscribe function
     })
+
+    // Default: no-op subscription that returns an unsubscribe fn so
+    // cleanupClients() doesn't blow up. Tests that care about the
+    // callback can override this implementation per-test.
+    vi.mocked(db.subscribeToClientUsers).mockImplementation(() => vi.fn())
 
     container = document.createElement('div')
     document.body.appendChild(container)
