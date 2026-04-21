@@ -674,7 +674,7 @@ function renderHeaderFilterList(query) {
 
 // New Task
 newTaskBtn.addEventListener('click', () => {
-  openModal(null, { db, currentUser, clients, projects, onSave: renderCurrentView })
+  openModal(null, buildCtx())
 })
 
 function populateFilters() {
@@ -706,14 +706,24 @@ function getFilteredTasks() {
   return tasks
 }
 
-function renderCurrentView() {
-  const tasks = getFilteredTasks()
-  const ctx = {
-    db, currentUser, clients, projects, people, allTasks, onSave: renderCurrentView,
+// Single source of truth for the ctx object that every view/modal/child
+// receives. Keeping the shape uniform means a permission check like
+// `ctx.userRole === 'client'` (see modal.js) can't accidentally read
+// `undefined` just because the caller built a partial ctx.
+function buildCtx() {
+  return {
+    db, currentUser, clients, projects, people, allTasks,
+    userRole, userClientId, userClientName,
+    onSave: renderCurrentView,
     filterClientId: '',
     filterProjectId: '',
     reconnectCalendar,
   }
+}
+
+function renderCurrentView() {
+  const tasks = getFilteredTasks()
+  const ctx = buildCtx()
 
   // Hide filters and new-task button on non-task views
   const filterGroup = document.getElementById('filter-group')
@@ -757,13 +767,13 @@ if (currentView !== 'references') cleanupReferences()
       renderAttendance(mainContent, ctx)
       break
     case 'client-board':
-      renderClientBoard(mainContent, tasks, { ...ctx, userClientId, userClientName, userRole })
+      renderClientBoard(mainContent, tasks, ctx)
       break
     case 'client-timesheets':
-      renderClientTimesheets(mainContent, allTasks, { ...ctx, userClientId, userClientName })
+      renderClientTimesheets(mainContent, allTasks, ctx)
       break
     case 'client-timeline':
-      renderClientTimeline(mainContent, tasks, { ...ctx, userClientId, userClientName, userRole })
+      renderClientTimeline(mainContent, tasks, ctx)
       break
   }
 }
