@@ -104,22 +104,13 @@ export async function renderMyDay(container, tasks, currentUser, ctx) {
   const weekFocusResults = allFocusResults.slice(0, 7)
   const nextWeekFocusResults = allFocusResults.slice(7)
 
-  // Build weekData
+  // Build weekData — dailyFocus is the user's intent; do not rewrite it
+  // when tasks get completed or reassigned. Display rules below handle
+  // filtering; reopening a task puts it back on its originally scheduled day.
   weekData = {}
   for (let i = 0; i < weekDates.length; i++) {
     const wd = weekDates[i]
-    let taskIds = weekFocusResults[i].taskIds
-    // Clean stale IDs for non-today days (remove done/reassigned tasks from future)
-    if (tasks.length > 0 && !wd.isToday && !wd.isPast && isOwnDay) {
-      const cleaned = taskIds.filter((id) => {
-        const t = tasks.find((task) => task.id === id)
-        return t && t.status !== 'done' && (t.assignees || []).includes(targetEmail)
-      })
-      if (cleaned.length !== taskIds.length) {
-        taskIds = cleaned
-        saveDailyFocus(ctx.db, targetEmail, wd.dateStr, taskIds)
-      }
-    }
+    const taskIds = weekFocusResults[i].taskIds
     weekData[wd.dateStr] = { taskIds: [...new Set(taskIds)], label: wd.label, isToday: wd.isToday, isPast: wd.isPast, date: wd.date }
   }
 
@@ -155,6 +146,22 @@ export async function renderMyDay(container, tasks, currentUser, ctx) {
     weekDayTasks[dateStr] = wd.taskIds
       .map((id) => tasks.find((t) => t.id === id))
       .filter((t) => t && (t.assignees || []).includes(targetEmail))
+  }
+
+  // Unscheduled done tasks: show on the day they were closed, so users
+  // can see "what I finished today" even for things they didn't formally
+  // schedule. Skip tasks that are already scheduled somewhere in the
+  // visible range — those show on their scheduled day.
+  const currentWeekDateSet = new Set(weekDates.map((wd) => wd.dateStr))
+  for (const t of tasks) {
+    if (t.status !== 'done' || !t.closedAt) continue
+    if (!(t.assignees || []).includes(targetEmail)) continue
+    if (weekTaskIdSet.has(t.id)) continue
+    const closedDate = toDate(t.closedAt)
+    if (!closedDate) continue
+    const closedDateStr = closedDate.toISOString().split('T')[0]
+    if (!currentWeekDateSet.has(closedDateStr)) continue
+    weekDayTasks[closedDateStr].push(t)
   }
 
   // Up Next (Unscheduled): active tasks not assigned to any weekday
