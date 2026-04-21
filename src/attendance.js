@@ -269,17 +269,28 @@ function renderMonthGrid(team, leaves) {
 
       const holiday = allHolidays.find((h) => h.date === dateStr)
 
-      if (holiday) {
-        rowsHtml += `<div class="att-grid-cell att-holiday-cell" title="${esc(holiday.name)}"></div>`
-        continue
-      }
-
-      // Check for overtime on weekends
-      const overtimeLeave = isWeekend ? leaves.find((l) =>
+      // Overtime can be logged on any non-working day — weekends or holidays.
+      const isOffDay = isWeekend || holiday
+      const overtimeLeave = isOffDay ? leaves.find((l) =>
         l.userEmail === member.email &&
         l.type === 'overtime' &&
         l.startDate === dateStr
       ) : null
+
+      if (holiday) {
+        const otSuffix = overtimeLeave
+          ? ` \u2022 Overtime (${overtimeLeave.halfDay ? 'half' : 'full'} day)`
+          : ''
+        const tooltip = `Holiday: ${holiday.name}${otSuffix}`
+        const dotHtml = overtimeLeave
+          ? `<span class="att-dot ${overtimeLeave.halfDay ? 'att-dot-yellow' : 'att-dot-green'}"></span>`
+          : ''
+        const leaveAttr = overtimeLeave ? ` data-leave-id="${overtimeLeave.id}"` : ''
+        rowsHtml += `<div class="att-grid-cell att-holiday-cell att-clickable${overtimeLeave ? ' att-has-leave' : ''}" data-email="${member.email}" data-date="${dateStr}"${leaveAttr} title="${esc(tooltip)}">
+          ${dotHtml}
+        </div>`
+        continue
+      }
 
       if (isWeekend && !overtimeLeave) {
         rowsHtml += `<div class="att-grid-cell att-weekend att-clickable" data-email="${member.email}" data-date="${dateStr}"></div>`
