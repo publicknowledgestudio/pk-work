@@ -369,7 +369,7 @@ export async function renderMyDay(container, tasks, currentUser, ctx) {
     </div>
   `
 
-  bindMyDayActions(container, tasks, currentUser, ctx, now, isOwnDay, { calDateStr, isCalToday, calFocusTaskIds, calTimeBlocks })
+  bindMyDayActions(container, tasks, currentUser, ctx, now, isOwnDay, { calDateStr, isCalToday, calFocusTaskIds, calTimeBlocks, renderSignal })
 }
 
 // ── Card renderers ──
@@ -444,7 +444,7 @@ function weekdayCard(task, ctx, now, isOwnDay, dateStr, isPast) {
 
 // ── Actions ──
 
-function bindMyDayActions(container, tasks, currentUser, ctx, now, isOwnDay, { calDateStr, isCalToday, calFocusTaskIds, calTimeBlocks } = {}) {
+function bindMyDayActions(container, tasks, currentUser, ctx, now, isOwnDay, { calDateStr, isCalToday, calFocusTaskIds, calTimeBlocks, renderSignal } = {}) {
   const myEmail = currentUser?.email
   const targetEmail = viewingEmail || myEmail
 
