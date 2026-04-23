@@ -86,12 +86,13 @@ service cloud.firestore {
       allow write: if isTeamMember();
     }
 
-    // Daily focus (per-user daily task curation)
+    // Daily focus (per-user daily task curation).
+    // Any team member can schedule tasks on any teammate's day — the whole
+    // studio workflow depends on gyan being able to plan charu's week, etc.
     match /dailyFocus/{docId} {
       allow read: if isTeamMember() || isClientUser();
       allow create: if isTeamMember();
-      allow update: if isTeamMember() &&
-        resource.data.userEmail == request.auth.token.email;
+      allow update: if isTeamMember();
     }
 
     // User profiles (photos, display names)
