@@ -214,7 +214,7 @@ function renderBalanceCards(team, leaves, userEmail, admin) {
 }
 
 function renderBalanceNumbers(balance, isMonthly = false) {
-  const overLimit = balance.available < 0 || (balance.available === 0 && balance.used > 0)
+  const overLimit = balance.unpaid > 0
   const periodSuffix = isMonthly ? ' this month' : ''
   const accruedSuffix = isMonthly ? ' this month' : ' so far'
   const usedLabel = isMonthly ? `used${periodSuffix}` : 'used or scheduled'
@@ -228,11 +228,16 @@ function renderBalanceNumbers(balance, isMonthly = false) {
     lines.push(`<div class="balance-detail-line balance-detail-accrued"><strong>+${balance.overtimeCredit}</strong> overtime credit</div>`)
   }
 
+  const unpaidLine = balance.unpaid > 0
+    ? `<div class="balance-unpaid"><strong>${balance.unpaid}</strong> unpaid</div>`
+    : ''
+
   return `
     <div class="balance-nums ${colorClass}">
       ${lines.join('')}
-      <div class="balance-headline">
-        <strong>${balance.available}</strong> left${periodSuffix}
+      <div class="balance-result">
+        <div class="balance-headline"><strong>${balance.available}</strong> left${periodSuffix}</div>
+        ${unpaidLine}
       </div>
     </div>
   `
@@ -462,7 +467,8 @@ function getBalance(member, type, leaves) {
       used: usedThisMonth,
       totalUsed,
       overtimeCredit: 0,
-      available: 1 - usedThisMonth,
+      unpaid: Math.max(0, usedThisMonth - 1),
+      available: Math.max(0, 1 - usedThisMonth),
     }
   }
 
@@ -480,7 +486,8 @@ function getBalance(member, type, leaves) {
     used,
     totalUsed: used,
     overtimeCredit,
-    available: accrued - used + overtimeCredit,
+    unpaid: Math.max(0, used - accrued - overtimeCredit),
+    available: Math.max(0, accrued - used + overtimeCredit),
   }
 }
 
