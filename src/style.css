@@ -5496,6 +5496,8 @@ body {
 
 .balance-detail-line strong { font-weight: 600; }
 
+.balance-nums .balance-detail-earned strong { color: #16a34a; }
+
 .balance-num-overtime {
   color: #16a34a;
   font-size: 11px;
