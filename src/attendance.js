@@ -215,18 +215,19 @@ function renderBalanceCards(team, leaves, userEmail, admin) {
 
 function renderBalanceNumbers(balance, isMonthly = false) {
   const overLimit = balance.available < 0 || (balance.available === 0 && balance.used > 0)
+  const periodSuffix = isMonthly ? ' this month' : ''
 
-  const overtimeHtml = balance.overtimeCredit > 0 ? `<span class="balance-num balance-num-overtime">+${balance.overtimeCredit} overtime</span>` : ''
-  const periodLabel = isMonthly ? ' this month' : ''
+  const overtimeText = balance.overtimeCredit > 0 ? ` \u00b7 +${balance.overtimeCredit} overtime` : ''
+  const detail = isMonthly
+    ? `${balance.used} used \u00b7 1/mo, no rollover`
+    : `${balance.accrued} earned \u00b7 ${balance.used} taken or scheduled \u00b7 1/mo${overtimeText}`
 
   return `
     <div class="balance-nums">
-      <span class="balance-num"><strong>${balance.used}</strong> used${periodLabel}</span>
-      <span class="balance-num-sep">/</span>
-      <span class="balance-num"><strong>${balance.accrued}</strong>${isMonthly ? '/mo' : ' available'}</span>
-      ${overtimeHtml}
-      <span class="balance-num-sep">\u00b7</span>
-      <span class="balance-num ${overLimit ? 'balance-num-over' : 'balance-num-ok'}"><strong>${balance.available}</strong> left</span>
+      <div class="balance-headline ${overLimit ? 'balance-num-over' : 'balance-num-ok'}">
+        <strong>${balance.available}</strong> left${periodSuffix}
+      </div>
+      <div class="balance-detail">${detail}</div>
     </div>
   `
 }
