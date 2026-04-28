@@ -8,7 +8,7 @@ import {
 } from 'firebase/auth'
 import { getFirestore } from 'firebase/firestore'
 import { firebaseConfig, TEAM, STATUSES } from './config.js'
-import { loadClients, loadClientById, loadProjects, loadProjectsByClient, loadPeople, subscribeToTasks, saveUserProfile, loadUserProfiles, updateTask, loadClientUser, subscribeToTasksByClient, setCurrentUser, seedContractsFromTeam } from './db.js'
+import { loadClients, loadClientById, loadProjects, loadProjectsByClient, loadPeople, subscribeToTasks, saveUserProfile, loadUserProfiles, updateTask, loadClientUser, subscribeToTasksByClient, setCurrentUser } from './db.js'
 import { renderBoard, renderBoardByAssignee, renderBoardByClient, renderBoardByProject } from './board.js'
 import { renderMyTasks } from './my-tasks.js'
 import { renderMyDay } from './my-day.js'
@@ -511,9 +511,6 @@ onAuthStateChanged(auth, async (user) => {
       clients = await loadClients(db)
       projects = await loadProjects(db)
       people = await loadPeople(db)
-      // Idempotent: seed initial contracts for any team member that doesn't
-      // have one yet. Removed in Phase 4 once joinDate hardcode is gone.
-      try { await seedContractsFromTeam(db, TEAM) } catch (e) { console.warn('contract seed skipped:', e?.message) }
     }
     populateFilters()
 

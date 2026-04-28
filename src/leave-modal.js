@@ -227,21 +227,13 @@ function countWeekdays(startDate, endDate) {
   return count
 }
 
-function monthsSinceJoin(joinDate) {
-  const join = new Date(joinDate + 'T00:00:00')
-  const now = new Date()
-  let months = (now.getFullYear() - join.getFullYear()) * 12 + (now.getMonth() - join.getMonth()) + 1
-  return Math.max(0, months)
-}
-
-// Accrued months for a person, preferring contracts (passed via ctx) and
-// falling back to the legacy joinDate hardcode. Returns null if neither is
-// available, so callers can skip paid/unpaid splitting.
-function accrualForMember(email, member) {
+// Accrued months for a person, computed from their contracts in ctx.
+// Returns null when there are no contracts on file, so callers can skip
+// paid/unpaid splitting (no contract → no balance to enforce against).
+function accrualForMember(email, _member) {
   const memberContracts = contractsForUser(currentCtx?.allContracts || [], email)
-  if (memberContracts.length > 0) return accrualMonthsFromContracts(memberContracts)
-  if (member?.joinDate) return monthsSinceJoin(member.joinDate)
-  return null
+  if (memberContracts.length === 0) return null
+  return accrualMonthsFromContracts(memberContracts)
 }
 
 function getUsedDays(email, type, allLeaves, excludeId) {

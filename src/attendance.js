@@ -195,7 +195,7 @@ function renderBalanceCards(team, leaves, userEmail, admin) {
       : `<span class="avatar-sm" style="background:${memberObj?.color || '#6b7280'}">${member.name[0]}</span>`
 
     const memberContracts = contractsForUser(allContracts, member.email)
-    const startDate = earliestContractStart(memberContracts) || member.joinDate
+    const startDate = earliestContractStart(memberContracts)
     const joinLabel = startDate ? formatDate(startDate) : ''
 
     return `
@@ -284,7 +284,7 @@ function renderMonthGrid(team, leaves) {
       ? `<img class="avatar-photo-xs" src="${memberObj.photoURL}" alt="${member.name}">`
       : `<span class="avatar-xs" style="background:${memberObj?.color || '#6b7280'}">${member.name[0]}</span>`
 
-    const memberStart = earliestContractStart(contractsForUser(allContracts, member.email)) || member.joinDate
+    const memberStart = earliestContractStart(contractsForUser(allContracts, member.email))
 
     rowsHtml += `<div class="att-grid-cell att-grid-name">${avatarHtml} ${esc(member.name)}</div>`
 
@@ -487,11 +487,11 @@ function getBalance(member, type, leaves) {
   }
 
   // Personal: 1 per month, rolls over. Sum across all of this person's
-  // contracts; months in gaps between contracts don't accrue.
+  // contracts; months in gaps between contracts don't accrue. People with
+  // no contracts on file accrue 0 — admin must add a contract on the
+  // Contracts page.
   const memberContracts = contractsForUser(allContracts, member.email)
-  const accrued = memberContracts.length > 0
-    ? accrualMonthsFromContracts(memberContracts)
-    : monthsSinceJoin(member.joinDate)
+  const accrued = accrualMonthsFromContracts(memberContracts)
   const used = typeLeaves.reduce((sum, l) => sum + (l.halfDay ? 0.5 : countWeekdays(l.startDate, l.endDate || l.startDate)), 0)
 
   // Overtime credits against personal leave balance
@@ -507,14 +507,6 @@ function getBalance(member, type, leaves) {
     unpaid: Math.max(0, used - accrued - overtimeCredit),
     available: Math.max(0, accrued - used + overtimeCredit),
   }
-}
-
-function monthsSinceJoin(joinDate) {
-  const join = new Date(joinDate + 'T00:00:00')
-  const now = new Date()
-  // Include the current month (if you join March 1, March counts as month 1)
-  let months = (now.getFullYear() - join.getFullYear()) * 12 + (now.getMonth() - join.getMonth()) + 1
-  return Math.max(0, months)
 }
 
 function countWeekdays(startDate, endDate) {

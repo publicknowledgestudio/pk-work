@@ -19,14 +19,15 @@ const admin = require('firebase-admin')
 admin.initializeApp()
 const db = admin.firestore()
 
-// Team config for leave balance calculations
+// Team config for leave balance calculations. Engagement dates live in the
+// `contracts` Firestore collection — see accrualForUser / earliestStart below.
 const TEAM_MEMBERS = [
-  { email: 'gyan@publicknowledge.co', name: 'Gyan', role: 'admin', joinDate: '2026-03-01' },
-  { email: 'charu@publicknowledge.co', name: 'Charu', role: 'admin', joinDate: '2026-03-01' },
-  { email: 'sharang@publicknowledge.co', name: 'Sharang', role: 'member', joinDate: '2026-03-01' },
-  { email: 'anandu@publicknowledge.co', name: 'Anandu', role: 'member', joinDate: '2026-03-01' },
-  { email: 'mohit@publicknowledge.co', name: 'Mohit', role: 'member', joinDate: '2026-03-16' },
-  { email: 'rakesh@publicknowledge.co', name: 'Rakesh', role: 'member', joinDate: '2026-04-01' },
+  { email: 'gyan@publicknowledge.co', name: 'Gyan', role: 'admin' },
+  { email: 'charu@publicknowledge.co', name: 'Charu', role: 'admin' },
+  { email: 'sharang@publicknowledge.co', name: 'Sharang', role: 'member' },
+  { email: 'anandu@publicknowledge.co', name: 'Anandu', role: 'member' },
+  { email: 'mohit@publicknowledge.co', name: 'Mohit', role: 'member' },
+  { email: 'rakesh@publicknowledge.co', name: 'Rakesh', role: 'member' },
 ]
 
 const CLAUDE_API_KEY = defineSecret('CLAUDE_API_KEY')
@@ -911,14 +912,6 @@ function countWeekdays(startDate, endDate) {
   return count
 }
 
-function monthsSinceJoin(joinDate) {
-  const join = new Date(joinDate + 'T00:00:00')
-  const now = new Date()
-  // Include the current month (join March 1 → March counts as month 1)
-  let months = (now.getFullYear() - join.getFullYear()) * 12 + (now.getMonth() - join.getMonth()) + 1
-  return Math.max(0, months)
-}
-
 // Months a single contract has accrued by `asOf`. Mirrors src/utils/contracts.js.
 function contractMonths(contract, asOf) {
   if (!contract || !contract.startDate) return 0
@@ -929,25 +922,22 @@ function contractMonths(contract, asOf) {
   return Math.max(0, (cap.getFullYear() - start.getFullYear()) * 12 + (cap.getMonth() - start.getMonth()) + 1)
 }
 
-// Sums accrued months across a person's contracts. Falls back to the legacy
-// joinDate hardcode if no contracts exist for the user (so the migration is
-// non-breaking until Phase 4 strips joinDate).
+// Sums accrued months across a person's contracts. Returns 0 for anyone with
+// no contracts in Firestore (admin must create one for new team members).
 async function accrualForUser(member, contractsByEmail = null) {
   const userContracts = contractsByEmail
     ? (contractsByEmail.get(member.email) || [])
     : (await db.collection('contracts').where('userEmail', '==', member.email).get())
         .docs.map((d) => d.data())
-  if (userContracts.length > 0) {
-    const now = new Date()
-    return userContracts.reduce((sum, c) => sum + contractMonths(c, now), 0)
-  }
-  return member.joinDate ? monthsSinceJoin(member.joinDate) : 0
+  if (userContracts.length === 0) return 0
+  const now = new Date()
+  return userContracts.reduce((sum, c) => sum + contractMonths(c, now), 0)
 }
 
-// Earliest contract start date string (YYYY-MM-DD) or fallback joinDate.
-function earliestStart(member, userContracts) {
+// Earliest contract start date string (YYYY-MM-DD) or null.
+function earliestStart(_member, userContracts) {
   const dates = (userContracts || []).map((c) => c.startDate).filter(Boolean).sort()
-  return dates[0] || member.joinDate || null
+  return dates[0] || null
 }
 
 // Loads all contracts once and indexes them by userEmail. Used by handlers

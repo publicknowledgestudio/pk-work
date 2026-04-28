@@ -10,14 +10,15 @@ export const firebaseConfig = {
   appId: '1:764388053600:web:2e761bac21bacc8d3de905',
 }
 
-// Team members
+// Team members. Engagement dates live in the Firestore `contracts`
+// collection — see src/contracts.js and src/utils/contracts.js.
 export const TEAM = [
-  { email: 'gyan@publicknowledge.co', name: 'Gyan', color: '#4f46e5', role: 'admin', joinDate: '2026-03-01' },
-  { email: 'charu@publicknowledge.co', name: 'Charu', color: '#0891b2', role: 'admin', joinDate: '2026-03-01' },
-  { email: 'sharang@publicknowledge.co', name: 'Sharang', color: '#c026d3', role: 'member', joinDate: '2026-03-01' },
-  { email: 'anandu@publicknowledge.co', name: 'Anandu', color: '#ea580c', role: 'member', joinDate: '2026-03-01' },
-  { email: 'mohit@publicknowledge.co', name: 'Mohit', color: '#059669', role: 'member', joinDate: '2026-03-16' },
-  { email: 'rakesh@publicknowledge.co', name: 'Rakesh', color: '#d97706', role: 'member', joinDate: '2026-04-01' },
+  { email: 'gyan@publicknowledge.co', name: 'Gyan', color: '#4f46e5', role: 'admin' },
+  { email: 'charu@publicknowledge.co', name: 'Charu', color: '#0891b2', role: 'admin' },
+  { email: 'sharang@publicknowledge.co', name: 'Sharang', color: '#c026d3', role: 'member' },
+  { email: 'anandu@publicknowledge.co', name: 'Anandu', color: '#ea580c', role: 'member' },
+  { email: 'mohit@publicknowledge.co', name: 'Mohit', color: '#059669', role: 'member' },
+  { email: 'rakesh@publicknowledge.co', name: 'Rakesh', color: '#d97706', role: 'member' },
 ]
 
 // Task statuses and their display config
@@ -50,5 +51,5 @@ export function isAdmin(email) {
 }
 
 export function getAttendanceTeam() {
-  return TEAM.filter(m => m.joinDate)
+  return TEAM
 }

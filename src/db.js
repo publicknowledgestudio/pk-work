@@ -685,23 +685,3 @@ export async function deleteContract(db, contractId) {
   return deleteDoc(doc(db, 'contracts', contractId))
 }
 
-// One-time auto-seed: for each team member with a hardcoded joinDate that has
-// no contract yet, create an open-ended initial contract. Idempotent: only
-// creates if there are zero contracts for that email. Removed in Phase 4 once
-// the joinDate hardcode is gone.
-export async function seedContractsFromTeam(db, team) {
-  const existing = await loadContracts(db)
-  const emailsWithContracts = new Set(existing.map((c) => c.userEmail))
-  const toSeed = team.filter((m) => m.joinDate && !emailsWithContracts.has(m.email))
-  if (toSeed.length === 0) return 0
-  await Promise.all(toSeed.map((m) => addDoc(collection(db, 'contracts'), {
-    userEmail: m.email,
-    startDate: m.joinDate,
-    endDate: null,
-    notes: 'Auto-seeded from initial joinDate',
-    createdBy: 'system',
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  })))
-  return toSeed.length
-}
