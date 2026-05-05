@@ -118,7 +118,7 @@ export function renderTimeGrid({
       if (!task) return ''
       const key = 'task:' + block.taskId
       const pos = layout.get(key) || { col: 0, totalCols: 1 }
-      return renderTaskBlock(block, task, ctx, isOwnDay, pos)
+      return renderTaskBlock(block, task, ctx, pos)
     })
     .join('')
 
@@ -151,7 +151,7 @@ export function renderTimeGrid({
             ? `<img class="client-logo-xs" src="${client.logoUrl}" alt="${esc(client.name)}">`
             : ''
           const deadline = deadlineTagHtml(t, now)
-          return `<div class="my-day-card upnext" data-id="${t.id}" draggable="${isOwnDay}">
+          return `<div class="my-day-card upnext" data-id="${t.id}" draggable="true">
             <div class="my-day-card-main">
               ${statusIconHtml(t.status)}
               ${t.priority === 'urgent' ? '<i class="ph-fill ph-warning urgent-icon"></i>' : ''}
@@ -162,9 +162,9 @@ export function renderTimeGrid({
                 ${deadline}
               </div>
             </div>
-            ${isOwnDay ? `<div class="my-day-card-actions">
+            <div class="my-day-card-actions">
               <button class="btn-icon-xs" data-action="unfocus" data-id="${t.id}" title="Remove from My Day"><i class="ph ph-x"></i></button>
-            </div>` : ''}
+            </div>
           </div>`
         }).join('')}
       </div>`
@@ -263,7 +263,7 @@ function layoutOverlaps(items) {
   return result
 }
 
-function renderTaskBlock(block, task, ctx, isOwnDay, pos) {
+function renderTaskBlock(block, task, ctx, pos) {
   const top = timeStrToY(block.start)
   const bottom = timeStrToY(block.end)
   const height = Math.max(bottom - top, SLOT_H)
@@ -313,10 +313,10 @@ function renderTaskBlock(block, task, ctx, isOwnDay, pos) {
           <span class="tb-title">${esc(task.title)}</span>
           <span class="tb-duration">${durLabel}</span>
         </div>
-        ${isOwnDay ? `<div class="tb-actions">
+        <div class="tb-actions">
           <button class="btn-icon-xs" data-action="unschedule" data-task-id="${task.id}" title="Remove from timeline"><i class="ph ph-x"></i></button>
         </div>
-        <div class="tb-resize" data-task-id="${task.id}"></div>` : ''}
+        <div class="tb-resize" data-task-id="${task.id}"></div>
       </div>
     `
   }
@@ -338,10 +338,10 @@ function renderTaskBlock(block, task, ctx, isOwnDay, pos) {
           <span class="tb-duration">${durLabel}</span>
         </div>
       </div>
-      ${isOwnDay ? `<div class="tb-actions">
+      <div class="tb-actions">
         <button class="btn-icon-xs" data-action="unschedule" data-task-id="${task.id}" title="Remove from timeline"><i class="ph ph-x"></i></button>
       </div>
-      <div class="tb-resize" data-task-id="${task.id}"></div>` : ''}
+      <div class="tb-resize" data-task-id="${task.id}"></div>
     </div>
   `
 }
@@ -391,9 +391,7 @@ function renderCalBlock(event, pos) {
 
 // ── Interactions ──
 
-export function bindTimeGridActions(container, { tasks, focusTasks, isOwnDay, ctx, onSave, onTaskClick }) {
-  if (!isOwnDay) return
-
+export function bindTimeGridActions(container, { tasks, focusTasks, isOwnDay, targetEmail, ctx, onSave, onTaskClick }) {
   const grid = container.querySelector('#tg')
   const body = grid?.querySelector('.tg-body')
   const scroll = container.querySelector('#tg-scroll')
@@ -606,17 +604,16 @@ export function bindTimeGridActions(container, { tasks, focusTasks, isOwnDay, ct
     if (!slot) return
     // Check if there's already a block at this position (don't show picker on occupied slots)
     const slotIdx = parseInt(slot.dataset.slot, 10)
-    showSlotPicker(container, slotIdx, tasks, focusTasks, ctx, onSave, scroll)
+    const pickerEmail = targetEmail || ctx.currentUser?.email || ''
+    showSlotPicker(container, slotIdx, tasks, focusTasks, ctx, onSave, scroll, pickerEmail)
   })
 }
 
 // ── Slot picker popover ──
 
-function showSlotPicker(container, slotIdx, tasks, focusTasks, ctx, onSave, scroll) {
+function showSlotPicker(container, slotIdx, tasks, focusTasks, ctx, onSave, scroll, targetEmail) {
   // Remove existing picker
   container.querySelector('.tg-picker')?.remove()
-
-  const targetEmail = ctx.currentUser?.email || ''
 
   // Get all active tasks assigned to user that are not done/backlog
   const available = tasks

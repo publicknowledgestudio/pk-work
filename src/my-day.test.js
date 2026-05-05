@@ -22,7 +22,10 @@ vi.mock('./context-menu.js', () => ({
   clearSelection: vi.fn(),
 }))
 vi.mock('./config.js', () => ({
-  TEAM: [{ email: 'alice@example.com', name: 'Alice' }],
+  TEAM: [
+    { email: 'alice@example.com', name: 'Alice' },
+    { email: 'bob@example.com', name: 'Bob' },
+  ],
   STATUSES: [],
 }))
 
@@ -58,5 +61,27 @@ describe('renderMyDay', () => {
     Object.defineProperty(ev, 'target', { value: container })
     container.dispatchEvent(ev)
     expect(fired).toBe(true)
+  })
+
+  it('keeps cards draggable and shows scheduling actions when viewing another person', async () => {
+    const { loadDailyFocus } = await import('./db.js')
+    const tasks = [
+      { id: 't1', title: 'Bob task', assignees: ['bob@example.com'], status: 'todo' },
+    ]
+    // First render as Alice viewing her own week, so file-scope viewingEmail = alice
+    await renderMyDay(container, tasks, currentUser, ctx)
+
+    // Switch to Bob via the person picker. The picker option click sets the
+    // module-scoped viewingEmail then kicks off renderMyDay (without awaiting),
+    // so we await an explicit re-render to settle deterministically.
+    document.querySelector('#myday-person-toggle').click()
+    document.querySelector('.person-picker-option[data-email="bob@example.com"]').click()
+    await renderMyDay(container, tasks, currentUser, ctx)
+
+    expect(container.querySelector('.my-day-greeting').textContent).toContain('Bob')
+    const upnext = container.querySelector('.my-day-card.upnext[data-id="t1"]')
+    expect(upnext).toBeTruthy()
+    expect(upnext.getAttribute('draggable')).toBe('true')
+    expect(upnext.querySelector('[data-action="focus"]')).toBeTruthy()
   })
 })

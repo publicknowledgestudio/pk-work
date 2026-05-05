@@ -335,7 +335,7 @@ export async function renderMyDay(container, tasks, currentUser, ctx) {
             <div class="my-day-weekday-list" data-drop="weekday" data-date="${wd.dateStr}">
               ${dayTasks.length > 0 ? dayTasks.map((t) => weekdayCard(t, ctx, now, isOwnDay, wd.dateStr, wd.isPast)).join('') : `
                 <div class="my-day-empty my-day-empty-sm">
-                  <span>${isOwnDay ? 'Drag tasks here' : 'Nothing planned'}</span>
+                  <span>Drag tasks here</span>
                 </div>
               `}
             </div>
@@ -386,7 +386,7 @@ function upNextCard(task, ctx, now, isOwnDay, isScheduled) {
     : ''
 
   return `
-    <div class="my-day-card upnext${isScheduled ? ' scheduled' : ''}" data-id="${task.id}" draggable="${isOwnDay}">
+    <div class="my-day-card upnext${isScheduled ? ' scheduled' : ''}" data-id="${task.id}" draggable="true">
       <div class="my-day-card-main">
         ${statusIcon(task.status)}
         ${task.priority === 'urgent' ? '<i class="ph-fill ph-warning urgent-icon"></i>' : ''}
@@ -398,7 +398,7 @@ function upNextCard(task, ctx, now, isOwnDay, isScheduled) {
           ${deadlineHtml}
         </div>
       </div>
-      ${isOwnDay && !isScheduled ? `
+      ${!isScheduled ? `
       <div class="my-day-card-actions">
         <button class="my-day-action-btn add-focus" data-action="focus" data-id="${task.id}" title="Add to today's focus">
           <i class="ph ph-plus-circle"></i>
@@ -419,7 +419,7 @@ function weekdayCard(task, ctx, now, isOwnDay, dateStr, isPast) {
   const deadlineHtml = deadlineTag(task, now)
 
   return `
-    <div class="my-day-card weekday${isPast ? ' past' : ''}${task.status === 'done' ? ' completed' : ''}" data-id="${task.id}" data-date="${dateStr}" draggable="${isOwnDay}">
+    <div class="my-day-card weekday${isPast ? ' past' : ''}${task.status === 'done' ? ' completed' : ''}" data-id="${task.id}" data-date="${dateStr}" draggable="true">
       <div class="my-day-card-main">
         ${statusIcon(task.status)}
         ${task.priority === 'urgent' ? '<i class="ph-fill ph-warning urgent-icon"></i>' : ''}
@@ -431,13 +431,11 @@ function weekdayCard(task, ctx, now, isOwnDay, dateStr, isPast) {
           ${deadlineHtml}
         </div>
       </div>
-      ${isOwnDay ? `
       <div class="my-day-card-actions">
         <button class="my-day-action-btn" data-action="remove-weekday" data-id="${task.id}" data-date="${dateStr}" title="Remove from this day">
           <i class="ph ph-x"></i>
         </button>
       </div>
-      ` : ''}
     </div>
   `
 }
@@ -527,6 +525,7 @@ function bindMyDayActions(container, tasks, currentUser, ctx, now, isOwnDay, { c
     tasks,
     focusTasks: tgFocusIds.map((id) => tasks.find((t) => t.id === id)).filter(Boolean),
     isOwnDay,
+    targetEmail,
     ctx: { ...ctx, currentUser },
     onTaskClick: (task) => openModal(task, ctx),
     onSave: async (action, taskId, start, end, newTitle) => {
