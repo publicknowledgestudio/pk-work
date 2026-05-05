@@ -22,6 +22,7 @@ import { setAccessToken, clearAccessToken } from './calendar.js'
 import { renderClientBoard } from './client-board.js'
 import { renderClientTimesheets } from './client-timesheets.js'
 import { renderClientTimeline } from './client-timeline.js'
+import { renderTeamTimeline } from './team-timeline.js'
 import { renderAttendance, cleanupAttendance } from './attendance.js'
 import { renderContracts, cleanupContracts } from './contracts.js'
 
@@ -57,6 +58,7 @@ const ROUTES = {
   '/board/team':    { view: 'board', boardView: 'assignee' },
   '/board/clients': { view: 'board', boardView: 'client' },
   '/board/projects':{ view: 'board', boardView: 'project' },
+  '/timeline':      { view: 'team-timeline' },
   '/timesheets':    { view: 'timesheets' },
   '/people':        { view: 'people' },
   '/references':    { view: 'references' },
@@ -69,7 +71,7 @@ const ROUTES = {
 }
 
 const VIEW_TO_PATH = {
-  'my-day': '/my-week', 'my-tasks': '/my-tasks',
+  'my-day': '/my-week', 'my-tasks': '/my-tasks', 'team-timeline': '/timeline',
   'timesheets': '/timesheets', 'people': '/people',
   'references': '/references', 'clients': '/manage',
   'attendance': '/attendance', 'contracts': '/contracts',
@@ -80,6 +82,8 @@ const BOARD_TO_PATH = {
   'status': '/board/backlog', 'assignee': '/board/team',
   'client': '/board/clients', 'project': '/board/projects',
 }
+
+const TEAM_ONLY_VIEWS = ['my-day', 'my-tasks', 'board', 'team-timeline', 'timesheets', 'people', 'references', 'clients', 'attendance', 'contracts']
 
 function navigateTo(view, boardView) {
   const path = view === 'board'
@@ -92,7 +96,10 @@ function handleRouteChange() {
   const hash = (location.hash || '').replace(/^#/, '')
   const route = ROUTES[hash]
 
-  if (route) {
+  if (route && userRole === 'client' && TEAM_ONLY_VIEWS.includes(route.view)) {
+    currentView = 'client-board'
+    history.replaceState(null, '', '#/client-board')
+  } else if (route) {
     currentView = route.view
     if (route.boardView) currentBoardView = route.boardView
   } else {
@@ -535,9 +542,7 @@ onAuthStateChanged(auth, async (user) => {
 
       // Hide team-only nav tabs
       navTabs.forEach((tab) => {
-        const view = tab.dataset.view
-        const teamOnlyViews = ['my-day', 'my-tasks', 'board', 'timesheets', 'people', 'references', 'clients', 'attendance', 'contracts']
-        if (teamOnlyViews.includes(view)) tab.style.display = 'none'
+        if (TEAM_ONLY_VIEWS.includes(tab.dataset.view)) tab.style.display = 'none'
       })
 
       // Hide mobile bottom nav for client users
@@ -868,7 +873,7 @@ function renderCurrentView() {
   // Hide filters and new-task button on non-task views
   const filterGroup = document.getElementById('filter-group')
   const isBoardView = currentView === 'board'
-  const isTaskView = isBoardView || currentView === 'my-tasks' || currentView === 'my-day'
+  const isTaskView = isBoardView || currentView === 'my-tasks' || currentView === 'my-day' || currentView === 'team-timeline'
   filterGroup.style.display = isTaskView ? '' : 'none'
   newTaskBtn.style.display = isTaskView ? '' : 'none'
 
@@ -915,6 +920,9 @@ if (currentView !== 'references') cleanupReferences()
       break
     case 'client-timeline':
       renderClientTimeline(mainContent, tasks, ctx)
+      break
+    case 'team-timeline':
+      renderTeamTimeline(mainContent, tasks, ctx)
       break
   }
 }

@@ -9,10 +9,12 @@
 
 :root {
   --bg: #f5f5f7;
+  --bg-secondary: #e8e8ed;
   --surface: #ffffff;
   --border: #e5e5ea;
   --border-light: #f0f0f2;
   --text: #1d1d1f;
+  --text-primary: #1d1d1f;
   --text-secondary: #86868b;
   --text-tertiary: #aeaeb2;
   --primary: #4f46e5;
@@ -4914,7 +4916,7 @@ body {
 }
 
 /* Client board header */
-.client-board-view .client-board-header {
+.client-board-header {
   display: flex;
   align-items: center;
   padding: 20px 20px 0;
@@ -4930,6 +4932,7 @@ body {
 }
 
 .segmented-control .segment {
+  font-family: var(--font);
   padding: 6px 14px;
   border: none;
   background: transparent;
@@ -4943,13 +4946,15 @@ body {
 }
 
 .segmented-control .segment:hover {
+  background: rgba(0, 0, 0, 0.04);
   color: var(--text-primary);
 }
 
-.segmented-control .segment.active {
+.segmented-control .segment.active,
+.segmented-control .segment.active:hover {
   background: #fff;
   color: var(--text-primary);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
 /* Client timesheet status badges */
@@ -5577,13 +5582,14 @@ body {
   flex-shrink: 0;
 }
 
-.month-picker {
+.week-picker {
   display: flex;
   align-items: center;
   gap: 4px;
 }
 
-.month-picker-btn {
+.week-picker-btn {
+  font-family: var(--font);
   background: none;
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -5595,12 +5601,13 @@ body {
   align-items: center;
 }
 
-.month-picker-btn:hover {
+.week-picker-btn:hover {
   background: var(--bg);
   color: var(--text);
 }
 
-.month-picker-label {
+.week-picker-label {
+  font-family: var(--font);
   background: none;
   border: none;
   font-size: 14px;
@@ -5611,7 +5618,7 @@ body {
   border-radius: var(--radius);
 }
 
-.month-picker-label:hover {
+.week-picker-label:hover {
   background: var(--bg);
 }
 

@@ -37,6 +37,18 @@ export function toISODate(ts) {
   return d.toISOString().split('T')[0]
 }
 
+// YYYY-MM-DD using LOCAL calendar components — no UTC conversion.
+// Use when the input is a local-midnight Date and the output should preserve
+// that calendar day regardless of the user's timezone (toISOString rolls
+// local-midnight back by one day for any timezone east of UTC).
+export function toLocalISODate(d) {
+  if (!d || !(d instanceof Date) || isNaN(d.getTime())) return ''
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
 // Convert any date-like value (Firestore Timestamp, { seconds }, Date, ISO
 // string) to an ISO-8601 UTC string. Returns null for absent values so
 // consumers can keep distinguishing "no date" from "epoch". Used at the

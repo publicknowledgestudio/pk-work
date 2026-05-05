@@ -1,7 +1,7 @@
 import { STATUSES, TEAM } from './config.js'
 import { updateTask } from './db.js'
 import { openModal } from './modal.js'
-import { toDate, formatDeadline } from './utils/dates.js'
+import { toDate, formatDeadline, toLocalISODate } from './utils/dates.js'
 
 function esc(str) {
   const el = document.createElement('span')
@@ -35,7 +35,7 @@ function avatarStack(assignees) {
   ).join('')}</div>`
 }
 
-function taskCard(task, ctx) {
+export function taskCard(task, ctx) {
   const project = task.projectId ? ctx.projects.find((p) => p.id === task.projectId) : null
   const client = ctx.clients.find((c) => c.id === task.clientId)
   const isDone = task.status === 'done'
@@ -71,6 +71,8 @@ function taskCard(task, ctx) {
 
 /* ── Column Generation ──────────────────────────────────────────── */
 
+const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
 function sameDay(a, b) {
   return a.getFullYear() === b.getFullYear() &&
     a.getMonth() === b.getMonth() &&
@@ -81,119 +83,53 @@ function dayId(d) {
   return `day-${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-function weekId(start) {
-  return `week-${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`
-}
-
 function formatDayLabel(d) {
   const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
   return `${days[d.getDay()]} ${d.getDate()}`
-}
-
-function formatWeekLabel(start, end) {
-  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-  const sMonth = monthNames[start.getMonth()]
-  if (start.getMonth() === end.getMonth()) {
-    return `${sMonth} ${start.getDate()}\u2013${end.getDate()}`
-  }
-  const eMonth = monthNames[end.getMonth()]
-  return `${sMonth} ${start.getDate()}\u2013${eMonth} ${end.getDate()}`
 }
 
 function startOfDay(d) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate())
 }
 
-function addDays(d, n) {
+export function addDays(d, n) {
   const r = new Date(d)
   r.setDate(r.getDate() + n)
   return r
 }
 
-function getMondayOfWeek(d) {
+export function getMondayOfWeek(d) {
   const day = d.getDay() // 0=Sun
   const diff = day === 0 ? -6 : 1 - day
   return addDays(startOfDay(d), diff)
 }
 
-function daysInMonth(month, year) {
-  return new Date(year, month + 1, 0).getDate()
+export function formatWeekRange(start, end) {
+  const sMonth = MONTHS_SHORT[start.getMonth()]
+  const eMonth = MONTHS_SHORT[end.getMonth()]
+  if (start.getFullYear() !== end.getFullYear()) {
+    return `${sMonth} ${start.getDate()}, ${start.getFullYear()} – ${eMonth} ${end.getDate()}, ${end.getFullYear()}`
+  }
+  if (start.getMonth() !== end.getMonth()) {
+    return `${sMonth} ${start.getDate()} – ${eMonth} ${end.getDate()}, ${start.getFullYear()}`
+  }
+  return `${sMonth} ${start.getDate()} – ${end.getDate()}, ${start.getFullYear()}`
 }
 
-export function generateColumns(month, year) {
+export function generateColumns(weekStart) {
   const today = startOfDay(new Date())
-  const isCurrentMonth = today.getFullYear() === year && today.getMonth() === month
-  const totalDays = daysInMonth(month, year)
-  const monthStart = new Date(year, month, 1)
-  const monthEnd = new Date(year, month, totalDays)
-
+  const start = startOfDay(weekStart)
   const columns = []
-  let dayColumnsEnd // date after last day column
-
-  if (isCurrentMonth) {
-    // Day columns: Monday of current week through end of next week, clamped to month
-    const monday = getMondayOfWeek(today)
-    const nextWeekEnd = addDays(monday, 13) // 14 days total (0-indexed: day 0 to day 13)
-    const start = monday < monthStart ? monthStart : monday
-    const end = nextWeekEnd > monthEnd ? monthEnd : nextWeekEnd
-
-    let cur = startOfDay(start)
-    while (cur <= end) {
-      columns.push({
-        id: dayId(cur),
-        label: formatDayLabel(cur),
-        type: 'day',
-        date: new Date(cur),
-        isToday: sameDay(cur, today),
-      })
-      cur = addDays(cur, 1)
-    }
-    dayColumnsEnd = addDays(end, 1)
-  } else {
-    // Day columns for first 2 weeks of that month
-    const end = Math.min(14, totalDays)
-    for (let i = 1; i <= end; i++) {
-      const d = new Date(year, month, i)
-      columns.push({
-        id: dayId(d),
-        label: formatDayLabel(d),
-        type: 'day',
-        date: new Date(d),
-        isToday: sameDay(d, today),
-      })
-    }
-    dayColumnsEnd = new Date(year, month, end + 1)
+  for (let i = 0; i < 7; i++) {
+    const d = addDays(start, i)
+    columns.push({
+      id: dayId(d),
+      label: formatDayLabel(d),
+      type: 'day',
+      date: d,
+      isToday: sameDay(d, today),
+    })
   }
-
-  // Week columns for remaining days in month after day columns
-  if (dayColumnsEnd <= monthEnd) {
-    // Start from the Monday on or after dayColumnsEnd
-    let weekStart = startOfDay(dayColumnsEnd)
-    // Align to Monday if not already
-    const dow = weekStart.getDay()
-    if (dow !== 1) {
-      // Go back to this week's Monday (the days before dayColumnsEnd are covered by day cols)
-      // Actually, we want to start the first week column from dayColumnsEnd itself
-      // and go until the following Sunday, then continue in full weeks
-    }
-
-    // Simpler approach: iterate from dayColumnsEnd to monthEnd in week chunks
-    let cur = startOfDay(dayColumnsEnd)
-    while (cur <= monthEnd) {
-      const wStart = new Date(cur)
-      const wEnd = new Date(Math.min(addDays(cur, 6).getTime(), monthEnd.getTime()))
-      columns.push({
-        id: weekId(wStart),
-        label: formatWeekLabel(wStart, wEnd),
-        type: 'week',
-        startDate: new Date(wStart),
-        endDate: new Date(wEnd),
-        isToday: today >= wStart && today <= wEnd,
-      })
-      cur = addDays(cur, 7)
-    }
-  }
-
   return columns
 }
 
@@ -207,13 +143,10 @@ export function assignTaskToColumn(task, columns) {
   const d = startOfDay(toDate(rawDate))
   if (!d || isNaN(d.getTime())) return 'unscheduled'
 
-  // Check day columns first
   for (const col of columns) {
-    if (col.type === 'day' && sameDay(d, col.date)) return col.id
-    if (col.type === 'week' && d >= col.startDate && d <= col.endDate) return col.id
+    if (sameDay(d, col.date)) return col.id
   }
 
-  // Outside all columns
   return null
 }
 
@@ -224,9 +157,7 @@ export function renderClientTimeline(container, tasks, ctx) {
   const clientTasks = tasks.filter((t) => t.clientId === clientId)
   const clientProjects = ctx.projects.filter((p) => p.clientId === clientId)
 
-  const today = new Date()
-  let selectedMonth = today.getMonth()
-  let selectedYear = today.getFullYear()
+  let weekStart = getMondayOfWeek(new Date())
   let selectedProjectId = ''
 
   function render() {
@@ -234,21 +165,18 @@ export function renderClientTimeline(container, tasks, ctx) {
       ? clientTasks.filter((t) => t.projectId === selectedProjectId)
       : clientTasks
 
-    const columns = generateColumns(selectedMonth, selectedYear)
+    const columns = generateColumns(weekStart)
+    const weekEnd = addDays(weekStart, 6)
 
-    // Bucket tasks into columns
     const buckets = { unscheduled: [] }
     for (const col of columns) buckets[col.id] = []
 
     for (const task of filtered) {
       const colId = assignTaskToColumn(task, columns)
-      if (colId === null) continue // outside month
+      if (colId === null) continue
       if (!buckets[colId]) buckets[colId] = []
       buckets[colId].push(task)
     }
-
-    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December']
 
     container.innerHTML = `
       <div class="timeline-view">
@@ -261,10 +189,10 @@ export function renderClientTimeline(container, tasks, ctx) {
           </div>
         ` : ''}
         <div class="timeline-header">
-          <div class="month-picker">
-            <button class="month-picker-btn month-prev" title="Previous month"><i class="ph ph-caret-left"></i></button>
-            <button class="month-picker-label month-label">${monthNames[selectedMonth]} ${selectedYear}</button>
-            <button class="month-picker-btn month-next" title="Next month"><i class="ph ph-caret-right"></i></button>
+          <div class="week-picker">
+            <button class="week-picker-btn week-prev" title="Previous week"><i class="ph ph-caret-left"></i></button>
+            <button class="week-picker-label week-label">${formatWeekRange(weekStart, weekEnd)}</button>
+            <button class="week-picker-btn week-next" title="Next week"><i class="ph ph-caret-right"></i></button>
           </div>
         </div>
         <div class="timeline-board">
@@ -284,7 +212,7 @@ export function renderClientTimeline(container, tasks, ctx) {
                 <span class="column-label">${col.label}</span>
                 <span class="column-count">${(buckets[col.id] || []).length}</span>
               </div>
-              <div class="column-tasks" data-col="${col.id}" data-col-type="${col.type}" data-date="${col.type === 'day' ? col.date.toISOString().slice(0, 10) : col.startDate.toISOString().slice(0, 10)}">
+              <div class="column-tasks" data-col="${col.id}" data-date="${toLocalISODate(col.date)}">
                 ${(buckets[col.id] || []).map((t) => taskCard(t, ctx)).join('')}
               </div>
             </div>
@@ -295,7 +223,6 @@ export function renderClientTimeline(container, tasks, ctx) {
 
     // ── Event listeners ──
 
-    // Project filter
     container.querySelectorAll('#timeline-project-filter .segment').forEach((btn) => {
       btn.addEventListener('click', () => {
         selectedProjectId = btn.dataset.project
@@ -303,25 +230,19 @@ export function renderClientTimeline(container, tasks, ctx) {
       })
     })
 
-    // Month navigation
-    container.querySelector('.month-prev')?.addEventListener('click', () => {
-      selectedMonth--
-      if (selectedMonth < 0) { selectedMonth = 11; selectedYear-- }
+    container.querySelector('.week-prev')?.addEventListener('click', () => {
+      weekStart = addDays(weekStart, -7)
       render()
     })
-    container.querySelector('.month-next')?.addEventListener('click', () => {
-      selectedMonth++
-      if (selectedMonth > 11) { selectedMonth = 0; selectedYear++ }
+    container.querySelector('.week-next')?.addEventListener('click', () => {
+      weekStart = addDays(weekStart, 7)
       render()
     })
-    container.querySelector('.month-label')?.addEventListener('click', () => {
-      const now = new Date()
-      selectedMonth = now.getMonth()
-      selectedYear = now.getFullYear()
+    container.querySelector('.week-label')?.addEventListener('click', () => {
+      weekStart = getMondayOfWeek(new Date())
       render()
     })
 
-    // Task card clicks
     container.querySelectorAll('.task-card').forEach((card) => {
       card.addEventListener('click', (e) => {
         if (e.target.closest('.status-btn')) return
@@ -329,12 +250,6 @@ export function renderClientTimeline(container, tasks, ctx) {
         if (task) openModal(task, ctx)
       })
     })
-
-    // Auto-scroll to today's column
-    const todayCol = container.querySelector('.timeline-col-today')
-    if (todayCol) {
-      todayCol.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' })
-    }
 
     // Drag and drop — scheduling
     container.querySelectorAll('.task-card').forEach((card) => {
