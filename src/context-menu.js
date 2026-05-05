@@ -7,7 +7,7 @@ let activeTaskIds = [] // supports single or multi-select
 let openSubmenu = null
 
 // The task card selectors used across views
-const TASK_SELECTORS = '.task-card, .my-task-row, .my-day-card, .scrum-card'
+const TASK_SELECTORS = '.task-card, .my-task-row, .my-day-card'
 
 // Multi-select state (shared with my-day.js via getter/setter)
 let selectedIds = new Set()

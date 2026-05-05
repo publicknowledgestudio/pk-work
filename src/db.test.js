@@ -55,8 +55,6 @@ import {
   createTask,
   updateTask,
   deleteTask,
-  submitStandup,
-  loadStandups,
   loadDailyFocus,
   saveDailyFocus,
   findDailyFocusContainingTask,

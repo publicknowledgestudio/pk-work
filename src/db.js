@@ -323,25 +323,6 @@ export async function deleteTask(db, taskId) {
   return deleteDoc(doc(db, 'tasks', taskId))
 }
 
-// ===== Standups =====
-
-export async function submitStandup(db, data) {
-  return addDoc(collection(db, 'standups'), {
-    userEmail: data.userEmail,
-    userName: data.userName,
-    yesterday: data.yesterday,
-    today: data.today,
-    blockers: data.blockers,
-    date: serverTimestamp(),
-  })
-}
-
-export async function loadStandups(db, limit = 20) {
-  const q = query(collection(db, 'standups'), orderBy('date', 'desc'))
-  const snap = await getDocs(q)
-  return snap.docs.slice(0, limit).map((d) => ({ id: d.id, ...d.data() }))
-}
-
 // ===== Daily Focus =====
 
 export async function loadDailyFocus(db, userEmail, dateStr) {

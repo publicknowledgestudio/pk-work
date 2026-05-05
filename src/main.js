@@ -12,7 +12,6 @@ import { loadClients, loadClientById, loadProjects, loadProjectsByClient, loadPe
 import { renderBoard, renderBoardByAssignee, renderBoardByClient, renderBoardByProject } from './board.js'
 import { renderMyTasks } from './my-tasks.js'
 import { renderMyDay } from './my-day.js'
-import { renderStandup } from './standup.js'
 import { renderClients, cleanupClients } from './clients.js'
 import { renderPeople, cleanupPeople } from './people.js'
 import { renderReferences, cleanupReferences } from './references.js'
@@ -58,7 +57,6 @@ const ROUTES = {
   '/board/team':    { view: 'board', boardView: 'assignee' },
   '/board/clients': { view: 'board', boardView: 'client' },
   '/board/projects':{ view: 'board', boardView: 'project' },
-  '/standup':       { view: 'standup' },
   '/timesheets':    { view: 'timesheets' },
   '/people':        { view: 'people' },
   '/references':    { view: 'references' },
@@ -71,7 +69,7 @@ const ROUTES = {
 }
 
 const VIEW_TO_PATH = {
-  'my-day': '/my-week', 'my-tasks': '/my-tasks', 'standup': '/standup',
+  'my-day': '/my-week', 'my-tasks': '/my-tasks',
   'timesheets': '/timesheets', 'people': '/people',
   'references': '/references', 'clients': '/manage',
   'attendance': '/attendance', 'contracts': '/contracts',
@@ -469,7 +467,7 @@ onAuthStateChanged(auth, async (user) => {
     if (user.photoURL) {
       userAvatar.innerHTML = `<img class="avatar-photo-sm" src="${user.photoURL}" alt="${user.displayName || ''}">`
       userAvatar.style.background = 'none'
-      // Store photoURL on the TEAM member for use in board/standup
+      // Store photoURL on the TEAM member for use in board
       if (member) member.photoURL = user.photoURL
       // Persist photo to Firestore so other users can see it (team only)
       if (userRole === 'team') {
@@ -538,7 +536,7 @@ onAuthStateChanged(auth, async (user) => {
       // Hide team-only nav tabs
       navTabs.forEach((tab) => {
         const view = tab.dataset.view
-        const teamOnlyViews = ['my-day', 'my-tasks', 'board', 'standup', 'timesheets', 'people', 'references', 'clients', 'attendance', 'contracts']
+        const teamOnlyViews = ['my-day', 'my-tasks', 'board', 'timesheets', 'people', 'references', 'clients', 'attendance', 'contracts']
         if (teamOnlyViews.includes(view)) tab.style.display = 'none'
       })
 
@@ -629,7 +627,7 @@ mobileMoreClose?.addEventListener('click', () => mobileMoreSheet?.classList.add(
 
 // Sync mobile nav active state on route change
 function syncMobileNav() {
-  const bottomViews = ['my-day', 'board', 'standup', 'attendance']
+  const bottomViews = ['my-day', 'board', 'attendance']
   mobileBottomNav?.querySelectorAll('.mobile-nav-btn').forEach((btn) => {
     if (btn.dataset.view === 'more') {
       // "More" is active when current view isn't one of the bottom bar views
@@ -890,9 +888,6 @@ if (currentView !== 'references') cleanupReferences()
       break
     case 'my-tasks':
       renderMyTasks(mainContent, tasks, currentUser, ctx)
-      break
-    case 'standup':
-      renderStandup(mainContent, allTasks, ctx)
       break
     case 'clients':
       renderClients(mainContent, ctx)
