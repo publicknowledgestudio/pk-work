@@ -1,6 +1,7 @@
 import { TEAM } from './config.js'
-import { updateTask } from './db.js'
+import { createTask, updateTask } from './db.js'
 import { openModal } from './modal.js'
+import { attachMention } from './mention.js'
 import { setSelectedTaskIds, clearSelection } from './context-menu.js'
 import { toDate, formatDeadline } from './utils/dates.js'
 
@@ -96,6 +97,9 @@ export function renderBacklog(container, tasks, currentUser, ctx) {
               <p>Nothing in the backlog${selectedClientId ? ' for this client' : isAll ? '' : ` for ${esc(target?.name || '')}`}.</p>
             </div>`
         }
+        <div class="column-add-wrap">
+          <input class="column-add-input" id="backlog-add-input" placeholder="+ Add task (@ to tag)" type="text">
+        </div>
       </div>
     </div>`
 
@@ -132,6 +136,38 @@ export function renderBacklog(container, tasks, currentUser, ctx) {
   container.querySelector('#backlog-person-toggle')?.addEventListener('click', () => {
     openPersonPicker(container, tasks, currentUser, ctx)
   })
+
+  // Inline add-task input with @ mention
+  const addInput = container.querySelector('#backlog-add-input')
+  if (addInput) {
+    const mention = attachMention(addInput, { projects: ctx.projects, clients: ctx.clients })
+    addInput.addEventListener('keydown', async (e) => {
+      if (e.key === 'Enter' && !mention.isOpen()) {
+        const title = addInput.value.trim()
+        if (!title) return
+        const mentionTags = mention.getTags()
+        const baseAssignees = (!isAll && viewingEmail) ? [viewingEmail] : []
+        const allAssignees = [...new Set([...baseAssignees, ...mentionTags.assignees])]
+        addInput.disabled = true
+        await createTask(ctx.db, {
+          title,
+          status: 'backlog',
+          assignees: allAssignees,
+          clientId: selectedClientId || ctx.filterClientId || '',
+          projectId: mentionTags.projectId || ctx.filterProjectId || '',
+          createdBy: currentUser?.email || '',
+        })
+        addInput.value = ''
+        addInput.disabled = false
+        mention.reset()
+        addInput.focus()
+      }
+      if (e.key === 'Escape' && !mention.isOpen()) {
+        addInput.value = ''
+        addInput.blur()
+      }
+    })
+  }
 
   setupMarquee(container, renderSignal)
 }
