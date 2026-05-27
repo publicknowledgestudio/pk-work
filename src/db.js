@@ -14,7 +14,6 @@ import {
   serverTimestamp,
   getDoc,
 } from 'firebase/firestore'
-import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 
 // Current user email — set once on login by main.js. Lets updateTask
 // stamp updatedBy without threading the email through every call site.
@@ -71,11 +70,45 @@ export async function deleteClient(db, clientId) {
   return deleteDoc(doc(db, 'clients', clientId))
 }
 
-export async function uploadClientLogo(file, clientId) {
-  const storage = getStorage()
-  const storageRef = ref(storage, `client-logos/${clientId}`)
-  await uploadBytes(storageRef, file)
-  return getDownloadURL(storageRef)
+export async function uploadClientLogo(file) {
+  const dataUrl = await readFileAsDataUrl(file)
+  return resizeImageDataUrl(dataUrl).catch(() => dataUrl)
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result)
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(file)
+  })
+}
+
+function resizeImageDataUrl(dataUrl, maxSize = 192) {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+
+    img.onload = () => {
+      const scale = Math.min(1, maxSize / Math.max(img.naturalWidth, img.naturalHeight))
+      const width = Math.max(1, Math.round(img.naturalWidth * scale))
+      const height = Math.max(1, Math.round(img.naturalHeight * scale))
+      const canvas = document.createElement('canvas')
+      canvas.width = width
+      canvas.height = height
+
+      const ctx = canvas.getContext('2d')
+      if (!ctx) {
+        resolve(dataUrl)
+        return
+      }
+
+      ctx.drawImage(img, 0, 0, width, height)
+      resolve(canvas.toDataURL('image/webp', 0.86))
+    }
+
+    img.onerror = reject
+    img.src = dataUrl
+  })
 }
 
 export function subscribeToClients(db, callback) {
@@ -665,4 +698,3 @@ export async function updateContract(db, contractId, data) {
 export async function deleteContract(db, contractId) {
   return deleteDoc(doc(db, 'contracts', contractId))
 }
-

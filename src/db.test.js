@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import * as firestore from 'firebase/firestore'
-import * as storage from 'firebase/storage'
 
 // Mock Firebase modules before importing db.js
 vi.mock('firebase/firestore', () => ({
@@ -20,13 +19,6 @@ vi.mock('firebase/firestore', () => ({
     fromDate: vi.fn((date) => ({ seconds: Math.floor(date.getTime() / 1000), nanoseconds: 0 })),
   },
   serverTimestamp: vi.fn(() => ({ _type: 'serverTimestamp' })),
-}))
-
-vi.mock('firebase/storage', () => ({
-  getStorage: vi.fn(() => ({ _type: 'storage' })),
-  ref: vi.fn((storage, path) => ({ _type: 'storageRef', _path: path })),
-  uploadBytes: vi.fn(),
-  getDownloadURL: vi.fn(),
 }))
 
 // Import after mocking
@@ -205,16 +197,21 @@ describe('db.js', () => {
       expect(callback).toHaveBeenCalledWith([{ id: 'c1', name: 'Test' }])
     })
 
-    it('should upload client logo and return URL', async () => {
+    it('should convert client logo uploads to data URLs', async () => {
       const mockFile = new File(['logo'], 'logo.png', { type: 'image/png' })
-      vi.mocked(storage.uploadBytes).mockResolvedValue(undefined)
-      vi.mocked(storage.getDownloadURL).mockResolvedValue('https://storage.example.com/client-logos/client-123')
+      const OriginalImage = globalThis.Image
+      globalThis.Image = class {
+        set src(_value) {
+          this.onerror?.(new Error('Image decode unavailable in test'))
+        }
+      }
 
-      const url = await uploadClientLogo(mockFile, 'client-123')
-
-      expect(storage.uploadBytes).toHaveBeenCalled()
-      expect(storage.getDownloadURL).toHaveBeenCalled()
-      expect(url).toBe('https://storage.example.com/client-logos/client-123')
+      try {
+        const url = await uploadClientLogo(mockFile, 'client-123')
+        expect(url).toMatch(/^data:image\/png;base64,/)
+      } finally {
+        globalThis.Image = OriginalImage
+      }
     })
   })
 

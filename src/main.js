@@ -25,6 +25,9 @@ import { renderClientTimeline } from './client-timeline.js'
 import { renderTeamTimeline } from './team-timeline.js'
 import { renderAttendance, cleanupAttendance } from './attendance.js'
 import { renderContracts, cleanupContracts } from './contracts.js'
+import { installImageFallbacks } from './utils/image-fallbacks.js'
+
+installImageFallbacks()
 
 // Preload cached image URLs into browser HTTP cache
 try {

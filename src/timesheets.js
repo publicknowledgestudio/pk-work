@@ -319,6 +319,7 @@ function fmtTime(timeStr) {
 
 function safeUrl(url) {
   if (!url || typeof url !== 'string') return null
+  if (url.startsWith('data:image/')) return url
   try {
     const parsed = new URL(url)
     if (parsed.protocol === 'https:' || parsed.protocol === 'http:') return url
