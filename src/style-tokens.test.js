@@ -54,6 +54,10 @@ const MODE_INVARIANT_TOKENS = new Set([
   '--hover', // alias of --surface-hover, which itself flips
 ])
 
+// Palette tokens (tier 1) are mode-invariant raw colors. Semantic tokens
+// reference them and flip per mode.
+const isPaletteToken = (name) => name.startsWith('--color-')
+
 const cssOutsideTokenBlocks =
   css.slice(0, rootBlock.headStart) +
   css.slice(rootBlock.end, darkBlock.headStart) +
@@ -90,6 +94,7 @@ describe('design system contract', () => {
     const missing = []
     for (const name of lightTokens.keys()) {
       if (MODE_INVARIANT_TOKENS.has(name)) continue
+      if (isPaletteToken(name)) continue
       if (!darkTokens.has(name)) missing.push(name)
     }
     expect(missing, `tokens declared in :root but missing from dark block:\n  ${missing.join('\n  ')}`).toEqual([])
