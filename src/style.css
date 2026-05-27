@@ -560,7 +560,7 @@ body {
   color: var(--text);
   cursor: pointer;
   transition: background 0.1s;
-  border-top: 1px solid var(--border-light, #f0f0f0);
+  border-top: 1px solid var(--border-light);
 }
 
 .header-filter-client:first-child {
@@ -612,7 +612,7 @@ body {
   color: var(--text-tertiary);
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  border-top: 1px solid var(--border-light, #f0f0f0);
+  border-top: 1px solid var(--border-light);
 }
 
 .header-filter-group-label img {
@@ -1400,7 +1400,7 @@ body {
 }
 
 .person-picker-option.active {
-  background: var(--primary-light, #ede9fe);
+  background: var(--primary-light);
 }
 
 .person-picker-option-info {
@@ -2961,7 +2961,7 @@ body {
 }
 
 .btn-ghost.danger {
-  color: var(--danger, #dc2626);
+  color: var(--danger);
 }
 .btn-ghost.danger:hover {
   background: var(--danger-soft);
@@ -3797,7 +3797,7 @@ body {
 }
 
 .tg-slot.drop-hover {
-  background: var(--surface-hover, rgba(0, 0, 0, 0.06));
+  background: var(--surface-hover);
   border-radius: 4px;
   z-index: 0;
 }
@@ -5519,7 +5519,7 @@ body {
 .attendance-header h2 {
   font-size: 20px;
   font-weight: 600;
-  color: var(--text-primary, #111);
+  color: var(--text-primary);
 }
 
 /* Balance Cards */
