@@ -167,7 +167,7 @@ body {
   border-radius: 16px;
   padding: 48px 40px;
   text-align: left;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-lg);
   max-width: 380px;
   width: 100%;
 }
@@ -481,7 +481,7 @@ body {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  box-shadow: var(--shadow-lg);
   z-index: 200;
   max-height: 320px;
   display: flex;
@@ -932,7 +932,7 @@ body {
   border-style: solid;
   border-color: var(--primary);
   background: var(--surface);
-  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+  box-shadow: 0 0 0 3px var(--primary-soft);
 }
 
 .column-add-input:disabled {
@@ -984,11 +984,11 @@ body {
 }
 
 .status-icon.review {
-  color: #8b5cf6;
+  color: var(--status-review-text);
 }
 
 .status-icon.done {
-  color: #22c55e;
+  color: var(--success);
 }
 
 /* ===== Status Toast ===== */
@@ -1151,7 +1151,7 @@ body {
 
 .urgent-icon {
   font-size: 14px;
-  color: #ef4444;
+  color: var(--danger);
   flex-shrink: 0;
   line-height: 1;
 }
@@ -1350,7 +1350,7 @@ body {
 .person-picker-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1514,7 +1514,7 @@ body {
 }
 .client-tab-logos .client-tab-logo {
   margin-right: -9px;
-  border: 1px solid #f5f5f7;
+  border: 1px solid var(--border);
 }
 .client-tab-logos .client-tab-logo:last-child {
   margin-right: 0;
@@ -1541,7 +1541,7 @@ body {
   flex-shrink: 0;
 }
 .client-tab.active .client-tab-logo-placeholder {
-  background: rgba(79,70,229,0.15);
+  background: var(--primary-soft);
   color: var(--primary);
 }
 
@@ -1554,11 +1554,11 @@ body {
   border-radius: 4px;
   font-size: 10px;
   font-weight: 600;
-  background: rgba(134,134,139,0.2);
+  background: var(--bg-secondary);
   color: var(--text-secondary);
 }
 .client-tab.active .client-tab-count {
-  background: rgba(79,70,229,0.2);
+  background: var(--primary-soft);
   color: var(--primary);
 }
 
@@ -1621,7 +1621,7 @@ body {
   padding: 1px 8px;
   border-radius: 10px;
   background: var(--status-warning-bg);
-  color: #b45309;
+  color: var(--status-warning-text);
   font-size: 10px;
   font-weight: 600;
   text-transform: none;
@@ -1673,7 +1673,7 @@ body {
 }
 
 .my-day-card.focus {
-  border-left: 3px solid #f59e0b;
+  border-left: 3px solid var(--warning);
 }
 
 .my-day-card.tomorrow {
@@ -1732,7 +1732,7 @@ body {
 }
 
 .my-day-card.scheduled {
-  border-left: 3px solid #f59e0b;
+  border-left: 3px solid var(--warning);
 }
 
 .my-day-card-meta {
@@ -1840,7 +1840,7 @@ body {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2034,17 +2034,17 @@ body {
 
 .status-pill.active[data-status="in_progress"] {
   background: var(--status-warning-bg);
-  color: #b45309;
+  color: var(--status-warning-text);
 }
 
 .status-pill.active[data-status="review"] {
-  background: #ede9fe;
-  color: #7c3aed;
+  background: var(--status-review-bg);
+  color: var(--status-review-text);
 }
 
 .status-pill.active[data-status="done"] {
-  background: #dcfce7;
-  color: var(--success);
+  background: var(--status-done-bg);
+  color: var(--status-done-text);
 }
 
 /* ===== Assignee Inline Row ===== */
@@ -2100,7 +2100,7 @@ body {
 
 .assignee-multi-select:focus-within {
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+  box-shadow: 0 0 0 3px var(--primary-soft);
 }
 
 .assignee-chips {
@@ -2205,7 +2205,7 @@ body {
 
 .project-picker.open .project-picker-display {
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+  box-shadow: 0 0 0 3px var(--primary-soft);
 }
 
 .project-picker-text {
@@ -2250,7 +2250,7 @@ body {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  box-shadow: var(--shadow-lg);
   z-index: 100;
   max-height: 280px;
   display: flex;
@@ -2369,7 +2369,7 @@ body {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  box-shadow: var(--shadow-lg);
   z-index: 300;
   max-height: 240px;
   overflow-y: auto;
@@ -2964,7 +2964,7 @@ body {
   color: var(--danger, #dc2626);
 }
 .btn-ghost.danger:hover {
-  background: rgba(220, 38, 38, 0.08);
+  background: var(--danger-soft);
 }
 
 .btn-sm {
@@ -3169,18 +3169,18 @@ body {
 .marquee-rect {
   position: fixed;
   border: 1.5px solid var(--primary);
-  background: rgba(99, 102, 241, 0.08);
+  background: var(--primary-soft);
   border-radius: 3px;
   pointer-events: none;
   z-index: 9999;
 }
 .my-day-card.selected {
   box-shadow: inset 0 0 0 2px var(--primary);
-  background: rgba(99, 102, 241, 0.06);
+  background: var(--primary-soft);
 }
 .my-task-row.selected {
   box-shadow: inset 0 0 0 2px var(--primary);
-  background: rgba(99, 102, 241, 0.06);
+  background: var(--primary-soft);
 }
 
 /* ===== Backlog view ===== */
@@ -3366,14 +3366,14 @@ body {
   border-radius: 999px;
   font-size: 12px;
   font-weight: 500;
-  background: rgba(99, 102, 241, 0.1);
-  color: #6366f1;
+  background: var(--info-soft);
+  color: var(--info);
   text-decoration: none;
   transition: background 0.15s;
 }
 
 .tg-allday-chip:hover {
-  background: rgba(99, 102, 241, 0.18);
+  background: var(--info-light);
 }
 
 .tg-allday-chip i {
@@ -3520,7 +3520,7 @@ body {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #ef4444;
+  background: var(--danger);
 }
 
 .tg-now-line {
@@ -3529,7 +3529,7 @@ body {
   right: 0;
   top: 0;
   height: 0;
-  border-top: 2px solid #ef4444;
+  border-top: 2px solid var(--danger);
 }
 
 /* ── Time blocks (shared base for task + calendar) ── */
@@ -3554,7 +3554,7 @@ body {
 .task-block {
   background: var(--surface);
   border: 1px solid var(--border-light);
-  border-left: 3px solid #f59e0b;
+  border-left: 3px solid var(--warning);
   padding: 4px 8px;
   cursor: pointer;
   flex-direction: column;
@@ -3574,15 +3574,15 @@ body {
 
 .task-block.dragging {
   opacity: 0.85;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-lg);
   z-index: 10;
   cursor: grabbing;
 }
 
 /* Completed task block on time grid — subtle green accent, faded */
 .task-block.done {
-  background: rgba(34, 197, 94, 0.06);
-  border-left-color: #22c55e;
+  background: var(--success-soft);
+  border-left-color: var(--success);
   opacity: 0.65;
 }
 
@@ -3597,8 +3597,8 @@ body {
 
 /* Calendar event block — indigo accent, read-only */
 .cal-block {
-  background: rgba(99, 102, 241, 0.1);
-  border-left: 3px solid #6366f1;
+  background: var(--info-soft);
+  border-left: 3px solid var(--info);
   padding: 4px 8px;
   text-decoration: none;
   color: var(--text);
@@ -3607,8 +3607,8 @@ body {
 }
 
 .cal-block:hover {
-  background: rgba(99, 102, 241, 0.18);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  background: var(--info-light);
+  box-shadow: var(--shadow-sm);
 }
 
 /* Block main content — horizontal row like my-day-card-main */
@@ -3654,7 +3654,7 @@ body {
 }
 
 .tb-deadline.overdue {
-  color: #ef4444;
+  color: var(--danger);
   font-weight: 600;
 }
 
@@ -3776,8 +3776,8 @@ body {
 }
 
 .tb-meet:hover {
-  background: rgba(99, 102, 241, 0.15);
-  color: #6366f1;
+  background: var(--info-light);
+  color: var(--info);
 }
 
 /* ── Slot targets (invisible, for drop + click) ── */
@@ -3803,7 +3803,7 @@ body {
 }
 
 .tg-slot.slot-hover {
-  background: rgba(99, 102, 241, 0.08);
+  background: var(--info-soft);
   border-radius: 4px;
   z-index: 0;
 }
@@ -3813,7 +3813,7 @@ body {
   right: 8px;
   font-size: 10px;
   font-weight: 600;
-  color: #6366f1;
+  color: var(--info);
   pointer-events: none;
   z-index: 4;
   transform: translateY(2px);
@@ -3829,7 +3829,7 @@ body {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-lg);
   overflow: hidden;
 }
 
@@ -4256,7 +4256,7 @@ body {
   right: 0;
   height: 60px;
   background: var(--surface);
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--border);
   z-index: 100;
   justify-content: space-around;
   align-items: center;
@@ -4284,11 +4284,11 @@ body {
 }
 
 .mobile-nav-btn.active {
-  color: #4f46e5;
+  color: var(--primary);
 }
 
 .mobile-nav-btn:active {
-  color: #4f46e5;
+  color: var(--primary);
 }
 
 /* More sheet */
@@ -4305,7 +4305,7 @@ body {
 .mobile-more-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--overlay);
 }
 
 .mobile-more-content {
@@ -4363,11 +4363,11 @@ body {
 }
 
 .mobile-more-item.active {
-  color: #4f46e5;
+  color: var(--primary);
 }
 
 .mobile-more-item.active i {
-  color: #4f46e5;
+  color: var(--primary);
 }
 
 /* ===== Clients & Projects — Layout with Detail Panel ===== */
@@ -4755,7 +4755,7 @@ body {
 .page-editor-textarea:focus {
   outline: none;
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+  box-shadow: 0 0 0 3px var(--primary-soft);
 }
 
 .page-editor-actions {
@@ -4827,11 +4827,11 @@ body {
 }
 
 .activity-task-icon.status-review {
-  color: #3b82f6;
+  color: var(--info);
 }
 
 .activity-task-icon.status-done {
-  color: #22c55e;
+  color: var(--success);
 }
 
 .activity-task-info {
@@ -4876,12 +4876,12 @@ body {
 
 .priority-urgent {
   background: var(--danger-light);
-  color: #ef4444;
+  color: var(--danger);
 }
 
 .priority-high {
-  background: #fff7ed;
-  color: #f97316;
+  background: var(--warning-soft);
+  color: var(--warning);
 }
 
 /* ===== Person Edit Meta Form ===== */
@@ -5973,7 +5973,7 @@ body {
 }
 
 .att-clickable:hover {
-  background: #f0f4ff !important;
+  background: var(--primary-light) !important;
 }
 
 .att-popover {
@@ -5982,7 +5982,7 @@ body {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 10px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  box-shadow: var(--shadow-lg);
   min-width: 200px;
   padding: 8px 0;
   animation: att-popover-in 0.12s ease-out;
@@ -6083,13 +6083,13 @@ body {
 }
 
 .att-popover-cancel {
-  border: 1px solid #fecaca;
+  border: 1px solid var(--danger);
   background: var(--danger-light);
   color: var(--danger);
 }
 
 .att-popover-cancel:hover {
-  background: #fee2e2;
+  background: var(--danger-soft);
 }
 
 .att-popover-action:disabled {
