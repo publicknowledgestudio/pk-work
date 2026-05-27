@@ -1,0 +1,246 @@
+/* ===========================================================================
+ * Design system tokens — three tiers
+ *
+ *  1. PALETTE   — raw colors (--color-*). Mode-invariant. Selectors must
+ *                 NOT reference these directly; route through the semantic
+ *                 layer so theming stays consistent.
+ *  2. SEMANTIC  — mode-aware role tokens (--bg, --text, --primary, ...).
+ *                 Defined in :root for light, overridden in @media dark.
+ *                 References the palette.
+ *  3. COMPONENT — component-scoped tokens (--toast-*, ...) for deviations
+ *                 from the semantic layer.
+ *
+ * Suffix conventions on semantic tokens:
+ *   default ----- the canonical value
+ *   -hover ------ hover state
+ *   -light ------ opaque pale variant (solid card-style background)
+ *   -soft  ------ low-alpha tint (overlays, focus rings, selection)
+ *
+ * Adding a token? Run `npm test -- style-tokens` — the contract test
+ * enforces that every theme-aware token has both a light and a dark value.
+ * =========================================================================== */
+
+:root {
+  /* ── PALETTE ──────────────────────────────────────────────────────── */
+  --color-white: #ffffff;
+
+  /* Day-mode neutrals (Apple-style ramp) */
+  --color-gray-50:  #f9fafb;
+  --color-gray-100: #f5f5f7;
+  --color-gray-150: #f0f0f2;
+  --color-gray-200: #e8e8ed;
+  --color-gray-250: #e5e5ea;
+  --color-gray-400: #aeaeb2;
+  --color-gray-500: #86868b;
+  --color-gray-600: #6b7280;
+  --color-gray-900: #1d1d1f;
+
+  /* Night-mode neutrals */
+  --color-zinc-100: #f4f4f5;
+  --color-zinc-300: #d4d4d8;
+  --color-zinc-400: #a1a1aa;
+  --color-zinc-500: #71717a;
+  --color-night-50:  #2a2d36;
+  --color-night-100: #252832;
+  --color-night-200: #20232b;
+  --color-night-300: #1f222a;
+  --color-night-400: #1a1c22;
+  --color-night-500: #17191f;
+  --color-night-600: #12141a;
+  --color-night-700: #101114;
+  --color-night-border: #30333d;
+  --color-night-input:  #373b46;
+
+  /* Brand: indigo (day) / lavender (night) */
+  --color-indigo-50:  #eef2ff;
+  --color-indigo-500: #4f46e5;
+  --color-indigo-600: #4338ca;
+  --color-lavender-300: #a29bff;
+  --color-lavender-400: #8b83ff;
+
+  /* Status hues */
+  --color-red-50:    #fef2f2;
+  --color-red-500:   #ef4444;
+  --color-red-600:   #dc2626;
+  --color-rose-300:  #fca5a5;
+  --color-rose-400:  #fb7185;
+  --color-rose-500:  #f43f5e;
+
+  --color-green-50:  #f0fdf4;
+  --color-green-300: #86efac;
+  --color-green-400: #4ade80;
+  --color-green-600: #16a34a;
+
+  --color-amber-50:  #fef3c7;
+  --color-amber-300: #fcd34d;
+  --color-amber-400: #fbbf24;
+  --color-amber-500: #f59e0b;
+  --color-amber-600: #d97706;
+  --color-amber-700: #b45309;
+  --color-orange-200: #fed7aa;
+  --color-orange-300: #fdba74;
+
+  --color-blue-50:  #eff6ff;
+  --color-blue-300: #93c5fd;
+  --color-blue-400: #60a5fa;
+  --color-blue-600: #2563eb;
+
+  --color-purple-300: #c4b5fd;
+  --color-purple-600: #7c3aed;
+
+  --color-slate-300: #cbd5e1;
+
+  /* ── SEMANTIC (light) ─────────────────────────────────────────────── */
+  color-scheme: light;
+  --bg: var(--color-gray-100);
+  --bg-secondary: var(--color-gray-200);
+  --surface: var(--color-white);
+  --surface-hover: var(--color-gray-50);
+  --surface-raised: var(--color-white);
+  --border: var(--color-gray-250);
+  --border-light: var(--color-gray-150);
+  --input-bg: var(--color-white);
+  --input-border: var(--color-gray-250);
+  --text: var(--color-gray-900);
+  --text-primary: var(--color-gray-900);
+  --text-secondary: var(--color-gray-500);
+  --text-tertiary: var(--color-gray-400);
+  --text-inverse: var(--color-white);
+
+  --primary: var(--color-indigo-500);
+  --primary-hover: var(--color-indigo-600);
+  --primary-light: var(--color-indigo-50);
+  --primary-soft: rgba(79, 70, 229, 0.1);
+
+  --danger: var(--color-red-500);
+  --danger-hover: var(--color-red-600);
+  --danger-light: var(--color-red-50);
+  --danger-soft: rgba(220, 38, 38, 0.08);
+
+  --success: var(--color-green-600);
+  --success-light: var(--color-green-50);
+  --success-soft: rgba(34, 197, 94, 0.1);
+
+  --warning: var(--color-amber-500);
+  --warning-light: var(--color-amber-50);
+  --warning-soft: rgba(245, 158, 11, 0.1);
+
+  --info: var(--color-blue-600);
+  --info-light: var(--color-blue-50);
+  --info-soft: rgba(59, 130, 246, 0.1);
+
+  --overlay: rgba(0, 0, 0, 0.4);
+
+  --status-backlog-bg: rgba(107, 114, 128, 0.1);
+  --status-backlog-text: var(--color-gray-600);
+  --status-todo-bg: rgba(59, 130, 246, 0.1);
+  --status-todo-text: var(--color-blue-600);
+  --status-progress-bg: rgba(245, 158, 11, 0.1);
+  --status-progress-text: var(--color-amber-600);
+  --status-review-bg: rgba(139, 92, 246, 0.1);
+  --status-review-text: var(--color-purple-600);
+  --status-done-bg: rgba(34, 197, 94, 0.1);
+  --status-done-text: var(--color-green-600);
+  --status-warning-bg: var(--color-amber-50);
+  --status-warning-text: var(--color-amber-700);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.1);
+
+  /* ── COMPONENT (light) ────────────────────────────────────────────── */
+  --toast-bg: var(--color-gray-900);
+  --toast-text: var(--color-white);
+  --toast-text-muted: var(--color-slate-300);
+  --toast-border: rgba(255, 255, 255, 0.15);
+  --toast-hover-bg: rgba(255, 255, 255, 0.12);
+  --toast-divider: rgba(255, 255, 255, 0.1);
+  --toast-code-bg: rgba(255, 255, 255, 0.08);
+  --toast-code-text: var(--color-orange-200);
+  --toast-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  --toast-ok: var(--color-green-300);
+  --toast-failed: var(--color-rose-300);
+
+  /* ── MODE-INVARIANT (geometry, typography, aliases) ───────────────── */
+  --radius: 8px;
+  --radius-lg: 12px;
+  --font: 'Google Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --hover: var(--surface-hover);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+
+    /* ── SEMANTIC (dark) ────────────────────────────────────────────── */
+    --bg: var(--color-night-700);
+    --bg-secondary: var(--color-night-400);
+    --surface: var(--color-night-500);
+    --surface-hover: var(--color-night-200);
+    --surface-raised: var(--color-night-300);
+    --border: var(--color-night-border);
+    --border-light: var(--color-night-100);
+    --input-bg: var(--color-night-600);
+    --input-border: var(--color-night-input);
+    --text: var(--color-zinc-100);
+    --text-primary: var(--color-zinc-100);
+    --text-secondary: var(--color-zinc-400);
+    --text-tertiary: var(--color-zinc-500);
+    --text-inverse: var(--color-white);
+
+    --primary: var(--color-lavender-400);
+    --primary-hover: var(--color-lavender-300);
+    --primary-light: rgba(139, 131, 255, 0.16);
+    --primary-soft: rgba(139, 131, 255, 0.16);
+
+    --danger: var(--color-rose-400);
+    --danger-hover: var(--color-rose-500);
+    --danger-light: rgba(251, 113, 133, 0.14);
+    --danger-soft: rgba(251, 113, 133, 0.14);
+
+    --success: var(--color-green-400);
+    --success-light: rgba(74, 222, 128, 0.13);
+    --success-soft: rgba(74, 222, 128, 0.13);
+
+    --warning: var(--color-amber-400);
+    --warning-light: rgba(251, 191, 36, 0.15);
+    --warning-soft: rgba(251, 191, 36, 0.15);
+
+    --info: var(--color-blue-400);
+    --info-light: rgba(96, 165, 250, 0.14);
+    --info-soft: rgba(96, 165, 250, 0.14);
+
+    --overlay: rgba(0, 0, 0, 0.68);
+
+    --status-backlog-bg: rgba(161, 161, 170, 0.14);
+    --status-backlog-text: var(--color-zinc-300);
+    --status-todo-bg: rgba(96, 165, 250, 0.14);
+    --status-todo-text: var(--color-blue-300);
+    --status-progress-bg: rgba(251, 191, 36, 0.15);
+    --status-progress-text: var(--color-amber-300);
+    --status-review-bg: rgba(167, 139, 250, 0.16);
+    --status-review-text: var(--color-purple-300);
+    --status-done-bg: rgba(74, 222, 128, 0.13);
+    --status-done-text: var(--color-green-300);
+    --status-warning-bg: rgba(251, 191, 36, 0.15);
+    --status-warning-text: var(--color-amber-300);
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+    --shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+    --shadow-lg: 0 18px 48px rgba(0, 0, 0, 0.38);
+
+    /* ── COMPONENT (dark) ───────────────────────────────────────────── */
+    --toast-bg: var(--color-night-50);
+    --toast-text: var(--color-zinc-100);
+    --toast-text-muted: var(--color-zinc-400);
+    --toast-border: rgba(255, 255, 255, 0.12);
+    --toast-hover-bg: rgba(255, 255, 255, 0.08);
+    --toast-divider: rgba(255, 255, 255, 0.08);
+    --toast-code-bg: rgba(255, 255, 255, 0.08);
+    --toast-code-text: var(--color-orange-300);
+    --toast-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+    --toast-ok: var(--color-green-400);
+    --toast-failed: var(--color-rose-400);
+  }
+}

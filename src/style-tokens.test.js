@@ -4,8 +4,9 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const raw = readFileSync(join(__dirname, 'style.css'), 'utf8')
-const css = raw.replace(/\/\*[\s\S]*?\*\//g, '')
+const stripComments = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '')
+const tokensCss = stripComments(readFileSync(join(__dirname, 'tokens.css'), 'utf8'))
+const styleCss = stripComments(readFileSync(join(__dirname, 'style.css'), 'utf8'))
 
 function findBlock(text, selectorRegex) {
   const m = text.match(selectorRegex)
@@ -29,8 +30,8 @@ function findBlock(text, selectorRegex) {
   return null
 }
 
-const rootBlock = findBlock(css, /^:root\s*\{/m)
-const darkBlock = findBlock(css, /@media\s*\(prefers-color-scheme:\s*dark\)\s*\{/)
+const rootBlock = findBlock(tokensCss, /^:root\s*\{/m)
+const darkBlock = findBlock(tokensCss, /@media\s*\(prefers-color-scheme:\s*dark\)\s*\{/)
 const darkRoot = darkBlock ? findBlock(darkBlock.body, /:root\s*\{/) : null
 
 const extractDecls = (body) => {
@@ -58,10 +59,8 @@ const MODE_INVARIANT_TOKENS = new Set([
 // reference them and flip per mode.
 const isPaletteToken = (name) => name.startsWith('--color-')
 
-const cssOutsideTokenBlocks =
-  css.slice(0, rootBlock.headStart) +
-  css.slice(rootBlock.end, darkBlock.headStart) +
-  css.slice(darkBlock.end)
+// All non-token CSS (style.css contains no token blocks after the split)
+const cssOutsideTokenBlocks = styleCss
 
 // Intentional literals — color values that don't need to theme-switch.
 // Add to this list with a comment explaining why.
@@ -82,12 +81,18 @@ const LITERAL_ALLOWED_LINES = new Set([
 const LITERAL_COLOR_RE = /#[0-9a-fA-F]{3,8}\b|\brgba?\(/
 
 describe('design system contract', () => {
-  it('parses the :root and dark @media blocks', () => {
+  it('parses the :root and dark @media blocks in tokens.css', () => {
     expect(rootBlock).not.toBeNull()
     expect(darkBlock).not.toBeNull()
     expect(darkRoot).not.toBeNull()
     expect(lightTokens.size).toBeGreaterThan(0)
     expect(darkTokens.size).toBeGreaterThan(0)
+  })
+
+  it('style.css imports tokens.css and declares no tokens of its own', () => {
+    expect(styleCss).toMatch(/@import\s+['"]\.\/tokens\.css['"]/)
+    expect(styleCss).not.toMatch(/^:root\s*\{/m)
+    expect(styleCss).not.toMatch(/@media\s*\(prefers-color-scheme:\s*dark\)/)
   })
 
   it('every theme-aware token in :root has a matching override in the dark @media block', () => {
