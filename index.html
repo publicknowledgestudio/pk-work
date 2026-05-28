@@ -33,16 +33,23 @@
           <nav class="header-nav">
             <button class="nav-tab active" data-view="my-day"><i class="ph-fill ph-sun"></i> <span class="nav-label">My Week</span></button>
             <button class="nav-tab" data-view="backlog"><i class="ph-fill ph-stack"></i> <span class="nav-label">Backlog</span></button>
-            <span class="nav-divider"></span>
             <button class="nav-tab" data-view="board"><i class="ph-fill ph-columns"></i> <span class="nav-label">Board</span></button>
-            <button class="nav-tab" data-view="team-timeline"><i class="ph-fill ph-calendar-dots"></i> <span class="nav-label">Timeline</span></button>
-            <button class="nav-tab" data-view="timesheets"><i class="ph-fill ph-receipt"></i> <span class="nav-label">Timesheets</span></button>
             <button class="nav-tab" data-view="attendance"><i class="ph-fill ph-calendar-check"></i> <span class="nav-label">Leaves</span></button>
-            <button class="nav-tab" data-view="contracts"><i class="ph-fill ph-file-text"></i> <span class="nav-label">Contracts</span></button>
-            <span class="nav-divider"></span>
-            <button class="nav-tab" data-view="people"><i class="ph-fill ph-address-book"></i> <span class="nav-label">People</span></button>
-            <button class="nav-tab" data-view="references"><i class="ph-fill ph-image-square"></i> <span class="nav-label">References</span></button>
             <button class="nav-tab" data-view="clients"><i class="ph-fill ph-gear"></i> <span class="nav-label">Manage</span></button>
+            <span class="nav-divider"></span>
+            <div class="nav-more" id="nav-more">
+              <button class="nav-tab nav-more-trigger" id="nav-more-trigger" type="button">
+                <i class="ph-fill ph-dots-three-outline"></i> <span class="nav-label">More</span>
+                <i class="ph ph-caret-down nav-more-caret"></i>
+              </button>
+              <div class="nav-more-dropdown hidden" id="nav-more-dropdown">
+                <button class="nav-more-item" data-view="people"><i class="ph-fill ph-address-book"></i> People</button>
+                <button class="nav-more-item" data-view="references"><i class="ph-fill ph-image-square"></i> References</button>
+                <button class="nav-more-item" data-view="team-timeline"><i class="ph-fill ph-calendar-dots"></i> Timeline</button>
+                <button class="nav-more-item" data-view="timesheets"><i class="ph-fill ph-receipt"></i> Timesheets</button>
+                <button class="nav-more-item" data-view="contracts"><i class="ph-fill ph-file-text"></i> Contracts</button>
+              </div>
+            </div>
             <button class="nav-tab client-nav hidden" data-view="client-board"><i class="ph-fill ph-columns"></i> <span class="nav-label">Board</span></button>
             <button class="nav-tab client-nav hidden" data-view="client-timesheets"><i class="ph-fill ph-receipt"></i> <span class="nav-label">Timesheets</span></button>
             <button class="nav-tab client-nav hidden" data-view="client-timeline"><i class="ph-fill ph-calendar-dots"></i> <span class="nav-label">Timeline</span></button>

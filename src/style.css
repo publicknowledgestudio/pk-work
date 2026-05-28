@@ -215,6 +215,87 @@ body {
   flex-shrink: 0;
 }
 
+.nav-more {
+  position: relative;
+  display: inline-flex;
+}
+
+.nav-more-trigger {
+  gap: 4px;
+}
+
+.nav-more-caret {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  transition: transform 0.15s;
+}
+
+.nav-more.open .nav-more-trigger {
+  color: var(--text);
+  background: var(--bg);
+}
+
+.nav-more.open .nav-more-caret {
+  transform: rotate(180deg);
+}
+
+.nav-more-trigger.has-active {
+  color: var(--primary);
+  background: var(--primary-light);
+}
+
+.nav-more-trigger.has-active .nav-more-caret {
+  color: var(--primary);
+}
+
+.nav-more-dropdown {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 6px);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow-lg);
+  min-width: 200px;
+  z-index: 100;
+  padding: 4px 0;
+  animation: att-popover-in 0.12s ease-out;
+}
+
+.nav-more-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 14px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 13px;
+  color: var(--text);
+  text-align: left;
+  transition: background 0.1s;
+}
+
+.nav-more-item:hover {
+  background: var(--surface-hover);
+}
+
+.nav-more-item.active {
+  color: var(--primary);
+  background: var(--primary-light);
+}
+
+.nav-more-item i {
+  font-size: 15px;
+  color: var(--text-secondary);
+}
+
+.nav-more-item.active i {
+  color: var(--primary);
+}
+
 /* Board sub-nav */
 .board-subnav {
   display: flex;

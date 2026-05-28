@@ -112,6 +112,7 @@ function handleRouteChange() {
 
   // Sync nav-tab active state
   navTabs.forEach((t) => t.classList.toggle('active', t.dataset.view === currentView))
+  if (typeof syncNavMore === 'function') syncNavMore()
   if (typeof syncMobileNav === 'function') syncMobileNav()
 
   if (currentUser) renderCurrentView()
@@ -601,7 +602,53 @@ onAuthStateChanged(auth, async (user) => {
 
 // Navigation — clicks update the hash, hashchange handler does the rest
 navTabs.forEach((tab) => {
+  if (tab.id === 'nav-more-trigger') return
   tab.addEventListener('click', () => navigateTo(tab.dataset.view))
+})
+
+// "More" desktop dropdown
+const navMore = document.getElementById('nav-more')
+const navMoreTrigger = document.getElementById('nav-more-trigger')
+const navMoreDropdown = document.getElementById('nav-more-dropdown')
+const navMoreItems = navMoreDropdown ? Array.from(navMoreDropdown.querySelectorAll('.nav-more-item')) : []
+const navMoreViews = navMoreItems.map((b) => b.dataset.view)
+
+function closeNavMore() {
+  if (!navMore) return
+  navMoreDropdown.classList.add('hidden')
+  navMore.classList.remove('open')
+}
+
+function syncNavMore() {
+  if (!navMoreTrigger) return
+  const isActive = navMoreViews.includes(currentView)
+  navMoreTrigger.classList.toggle('has-active', isActive)
+  navMoreItems.forEach((it) => it.classList.toggle('active', it.dataset.view === currentView))
+}
+
+navMoreTrigger?.addEventListener('click', (e) => {
+  e.stopPropagation()
+  navMoreDropdown.classList.toggle('hidden')
+  navMore.classList.toggle('open')
+})
+
+navMoreItems.forEach((item) => {
+  item.addEventListener('click', () => {
+    closeNavMore()
+    navigateTo(item.dataset.view)
+  })
+})
+
+document.addEventListener('mousedown', (e) => {
+  if (navMore && !navMore.contains(e.target) && !navMoreDropdown.classList.contains('hidden')) {
+    closeNavMore()
+  }
+})
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && navMore && !navMoreDropdown.classList.contains('hidden')) {
+    closeNavMore()
+  }
 })
 
 // Mobile bottom nav
