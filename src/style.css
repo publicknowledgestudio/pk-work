@@ -279,7 +279,12 @@ body {
 }
 
 .nav-more-item:hover {
-  background: var(--surface-hover);
+  color: var(--text);
+  background: var(--bg);
+}
+
+.nav-more-item:hover i {
+  color: var(--text);
 }
 
 .nav-more-item.active {
