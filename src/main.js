@@ -127,7 +127,6 @@ const loginBtn = document.getElementById('login-btn')
 const logoutBtn = document.getElementById('logout-btn')
 const userAvatar = document.getElementById('user-avatar')
 const mainContent = document.getElementById('main-content')
-const newTaskBtn = document.getElementById('new-task-btn')
 const navTabs = document.querySelectorAll('.nav-tab')
 const filterAssignee = document.getElementById('filter-assignee')
 
@@ -561,7 +560,6 @@ onAuthStateChanged(auth, async (user) => {
       // Hide team-only header controls
       const filterGroup = document.getElementById('filter-group')
       if (filterGroup) filterGroup.style.display = 'none'
-      newTaskBtn.style.display = 'none'
     }
 
     // Subscribe to tasks (real-time) — scoped for client users
@@ -867,11 +865,6 @@ function renderHeaderFilterList(query) {
   })
 }
 
-// New Task
-newTaskBtn.addEventListener('click', () => {
-  openModal(null, buildCtx())
-})
-
 function populateFilters() {
   // Assignee filter
   filterAssignee.innerHTML = '<option value="">Everyone</option>'
@@ -920,12 +913,11 @@ function renderCurrentView() {
   const tasks = getFilteredTasks()
   const ctx = buildCtx()
 
-  // Hide filters and new-task button on non-task views
+  // Hide filters on non-task views
   const filterGroup = document.getElementById('filter-group')
   const isBoardView = currentView === 'board'
   const isTaskView = isBoardView || currentView === 'backlog' || currentView === 'my-day' || currentView === 'team-timeline'
   filterGroup.style.display = isTaskView ? '' : 'none'
-  newTaskBtn.style.display = isTaskView ? '' : 'none'
 
   // Clean up subscriptions when leaving views
   if (currentView !== 'clients') cleanupClients()
