@@ -22,20 +22,39 @@ export function attachMention(input, { projects = [], clients = [] } = {}) {
       .filter((m) => m.name.toLowerCase().includes(q) || m.email.toLowerCase().includes(q))
       .map((m) => ({ type: 'person', id: m.email, name: m.name, color: m.color, photoURL: m.photoURL }))
 
+    // Match by project name OR by client name (typing a client name expands
+    // to all of that client's projects). De-dupe so a single project isn't
+    // shown twice when both its own name and its client's name match.
     const projs = tags.projectId
       ? [] // already selected a project
-      : projects
-        .filter((p) => p.name.toLowerCase().includes(q))
-        .map((p) => {
-          const client = clients.find((c) => c.id === p.clientId)
-          return {
-            type: 'project',
-            id: p.id,
-            name: p.name,
-            clientName: client?.name || '',
-            clientLogo: client?.logoUrl || '',
+      : (() => {
+          const matchedClientIds = new Set(
+            clients
+              .filter((c) => q && c.name.toLowerCase().includes(q))
+              .map((c) => c.id),
+          )
+          const seen = new Set()
+          const out = []
+          for (const p of projects) {
+            const nameMatch = p.name.toLowerCase().includes(q)
+            const clientMatch = matchedClientIds.has(p.clientId)
+            if (!nameMatch && !clientMatch) continue
+            if (seen.has(p.id)) continue
+            seen.add(p.id)
+            const client = clients.find((c) => c.id === p.clientId)
+            out.push({
+              type: 'project',
+              id: p.id,
+              name: p.name,
+              clientName: client?.name || '',
+              clientLogo: client?.logoUrl || '',
+              // Rank: client matches first, then project-name matches
+              _rank: clientMatch ? 0 : 1,
+            })
           }
-        })
+          out.sort((a, b) => a._rank - b._rank)
+          return out
+        })()
 
     return [...people, ...projs]
   }

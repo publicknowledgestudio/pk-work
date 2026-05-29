@@ -2366,39 +2366,39 @@ body {
 .mention-chip {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 6px;
-  border-radius: 10px;
-  font-size: 11px;
+  gap: 6px;
+  padding: 3px 8px 3px 4px;
+  border-radius: 6px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 13px;
   font-weight: 500;
-  line-height: 1;
+  line-height: 1.2;
   white-space: nowrap;
 }
 
-.mention-chip.person {
-  background: var(--primary-light);
-  color: var(--primary);
-}
-
+.mention-chip.person,
 .mention-chip.project {
-  background: var(--success-light);
-  color: var(--success);
+  background: var(--surface-raised);
+  color: var(--text);
 }
 
 .mention-chip img.avatar-photo-xs {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
 }
 
 .mention-chip .avatar-xs {
-  width: 16px;
-  height: 16px;
-  font-size: 8px;
+  width: 18px;
+  height: 18px;
+  font-size: 9px;
 }
 
 .mention-chip .client-logo-xs {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
 }
 
 .mention-chip-remove {
