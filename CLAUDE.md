@@ -20,9 +20,9 @@ Cloud Functions  →  api (REST API for CRUD, authenticated via x-api-key)
 Slack            ← Scrumpy bot (incoming webhook, posts formatted summaries)
                  ← Asty / OpenClaw (socket mode, reads/writes via tools + Slack MCP)
 
-OpenClaw Gateway → Runs on Gyan's MacBook (LaunchAgent)
-                 → Plugins: openclaw-pkwork (9 tools), openclaw-mem0 (long-term memory)
-                 → Workspace: ~/clawd/ (TOOLS.md, SOUL.md, etc.)
+OpenClaw Gateway → Runs on an Oracle Cloud free-tier VM
+                 → Plugins: openclaw-pkwork (5 tools), openclaw-mem0 (long-term memory)
+                 → Workspace: ~/clawd/ (config .md symlinked from the asty-kb repo)
                  → Cron jobs: daily briefing, scrum reminder, stale task detection, etc.
                  → Google Calendar: via gog CLI (gyan@publicknowledge.co)
 ```
@@ -33,7 +33,7 @@ OpenClaw Gateway → Runs on Gyan's MacBook (LaunchAgent)
 - **Firebase project:** workdotpk-a06dc
 - **API endpoint:** https://us-central1-workdotpk-a06dc.cloudfunctions.net/api
 - **Slack webhook endpoint:** https://us-central1-workdotpk-a06dc.cloudfunctions.net/slackWebhook
-- **Slack channels:** #daily-scrum, #leaves, #references (C08UCQXH7D0)
+- **Slack channels:** #daily-scrum, #leaves, #references (C08UCQXH7D0), #tell-asty (Asty's task inbox). Each client also has its own channel — see `slackChannelId` on the client doc.
 - **Slack bots:** Scrumpy (incoming webhook), Asty (OpenClaw, socket mode)
 
 ## Project Structure
@@ -87,11 +87,16 @@ All endpoints on `api` require header: `x-api-key: <CLAUDE_API_KEY>`
 | POST | /tasks | Create task. Body: `{ title, assignees[], status, priority, clientId, projectId, description, deadline, notes[], createdBy }` |
 | PATCH | /tasks/:id | Update task. Body: any task fields. Setting `status: "done"` auto-sets `closedAt`. |
 | DELETE | /tasks/:id | Delete task |
+| GET | /search | Free-text search across clients, projects, people, tasks. Query: `?q=term` (substring, case-insensitive) |
+| GET | /status | Active-work digest. Query: `?scope=` (client name, person first-name, `today`, or omit for studio-wide). Returns counts **plus** the active task lists (todo/in_progress/review) and the client's `slackChannelId` |
 | GET | /scrum | Daily scrum summary: closed yesterday + open items per person |
 | POST | /standups | Submit standup. Body: `{ userEmail, userName, yesterday, today, blockers }` |
 | GET | /standups | List recent standups (limit 20). Filter: `?userEmail=` |
 | GET | /clients | List all clients |
-| GET | /projects | List all projects |
+| GET | /projects | List all projects. Filter: `?clientId=x` |
+| GET/POST | /people | List or create people (team, client contacts, external) |
+| GET/PATCH/DELETE | /people/:id | Get, update, or delete a person (`/people/:id/content` for page content) |
+| GET | /processes | List studio processes (`/processes/:id` for one) |
 | POST | /notes | Store meeting notes. Body: `{ content, source, taskIds, createdBy }` |
 | GET | /references | List references. Filters: `?clientId=x&projectId=x&tag=x&sharedBy=x&limit=50&offset=0` |
 | POST | /references | Create reference. Body: `{ url, title, description, imageUrl, tags[], clientId, projectId, sharedBy, slackMessageTs, slackChannel }` |
@@ -117,8 +122,10 @@ The task model was migrated from `assignee` (single string) to `assignees` (arra
 
 - **tasks** — title, description, assignees[], status, priority, clientId, projectId, deadline, notes[], createdAt, updatedAt, closedAt, createdBy
 - **standups** — userEmail, userName, yesterday, today, blockers, date
-- **clients** — name (current: SCC Online, Hammock, Brunk, Presentations.ai)
+- **clients** — name, slackChannelId (11 clients — see Clients section)
 - **projects** — name, clientId
+- **people** — name, email, role, type, clientIds[] (team members, client contacts, external people)
+- **processes** — studio process docs
 - **notes** — content, source, taskIds, createdBy, createdAt
 - **references** — url, title, description, imageUrl, tags[], clientId, projectId, sharedBy, slackMessageTs, slackChannel, createdAt
 - **moodboards** — name, description, referenceIds[], clientId, projectId, createdBy, createdAt, updatedAt
@@ -162,7 +169,7 @@ Status emojis (used by Asty in Slack):
 
 ## Asty — OpenClaw AI Studio Manager
 
-Asty is an always-on AI agent that acts as the studio manager for Public Knowledge. It runs as an OpenClaw gateway on Gyan's MacBook via LaunchAgent.
+Asty is an always-on AI agent that acts as the studio manager for Public Knowledge. It runs as an OpenClaw gateway on an Oracle Cloud free-tier VM.
 
 ### OpenClaw Setup
 
@@ -170,7 +177,7 @@ Asty is an always-on AI agent that acts as the studio manager for Public Knowled
 ~/.openclaw/
   openclaw.json           # Main config (plugins, Slack tokens, gateway settings)
   extensions/
-    openclaw-pkwork/      # PK Work task management plugin (9 tools)
+    openclaw-pkwork/      # PK Work task management plugin (5 tools)
     openclaw-mem0/        # Long-term memory via Mem0 platform
     openclaw-supermemory/ # Disabled — using mem0 instead
   cron/
@@ -179,15 +186,6 @@ Asty is an always-on AI agent that acts as the studio manager for Public Knowled
     gateway.log           # stdout
     gateway.err.log       # stderr
 
-<<<<<<< HEAD
-~/clawd/                  # OpenClaw workspace (symlinks → ~/knowledge-base/config/)
-  TOOLS.md                # Studio Manager instructions, tools, routines
-  SOUL.md                 # Agent personality
-  HEARTBEAT.md            # Periodic task instructions
-  USER.md                 # User profile
-  IDENTITY.md             # Agent identity (named after the * in PK logo)
-  AGENTS.md               # Agent definitions
-=======
 ~/knowledge-base/         # asty-kb GitHub repo (pulled every 5 min via crontab)
   config/
     TOOLS.md              # Studio Manager instructions, tools, routines
@@ -197,30 +195,29 @@ Asty is an always-on AI agent that acts as the studio manager for Public Knowled
     IDENTITY.md           # Agent identity (named after the * in PK logo)
     AGENTS.md             # Agent definitions
 
-~/clawd/                  # OpenClaw workspace (symlinks → ~/knowledge-base/config/)
+~/clawd/                  # OpenClaw workspace (config .md symlinked from ~/knowledge-base/config/)
   *.md → ../knowledge-base/config/*.md
->>>>>>> 7cfa2e5dbbc6e49eff74796368fe818cb5c58885
 ```
 
 **Config sync:** These files live in the `asty-kb` GitHub repo under `config/`. On the VM, `~/clawd/*.md` are symlinks to `~/knowledge-base/config/*.md`. A crontab entry pulls the repo every 5 minutes: `*/5 * * * * cd ~/knowledge-base && git pull --rebase --quiet`. The old Firestore-based config-sync cron job has been disabled.
 
 ### OpenClaw Plugin: openclaw-pkwork
 
-Provides 9 tools that wrap the PK Work REST API:
+Provides 5 consolidated tools that wrap the PK Work REST API:
 
-| Tool | API Call | Purpose |
-|------|----------|---------|
-| `pkwork_list_tasks` | GET /tasks | View tasks with optional filters |
-| `pkwork_create_task` | POST /tasks | Create new task |
-| `pkwork_update_task` | PATCH /tasks/:id | Update task status, assignee, priority, etc. |
-| `pkwork_delete_task` | DELETE /tasks/:id | Delete a task |
-| `pkwork_scrum_summary` | GET /scrum | Get daily scrum summary |
-| `pkwork_submit_standup` | POST /standups | Record a standup |
-| `pkwork_list_standups` | GET /standups | View recent standups |
-| `pkwork_list_clients` | GET /clients | List all clients |
-| `pkwork_list_projects` | GET /projects | List all projects |
+| Tool | API Call(s) | Purpose |
+|------|-------------|---------|
+| `pkwork_search` | GET /search?q= | Free-text search across clients, projects, people, tasks (substring, case-insensitive) |
+| `pkwork_status` | GET /status?scope= | Active-work digest for a scope (studio-wide, a client, a person, or `today`). Returns counts **and** the active task lists (todo/in_progress/review) plus the client's `slackChannelId` |
+| `pkwork_task_add` | POST /tasks | Create a task (title required; optional clientName, projectName, assignee, deadline, description, priority) |
+| `pkwork_task_set` | PATCH/DELETE /tasks/:id | Modify a task by ID (status, assignee, deadline, priority, …) or delete it with `delete=true` |
+| `pkwork_raw` | any | Escape hatch for direct REST calls (GET/POST/PATCH/DELETE) to endpoints not covered above |
 
-**Config:** API key is stored directly in `openclaw.json` under `plugins.entries.openclaw-pkwork.config.apiKey` (not env vars — LaunchAgent env propagation doesn't work reliably with OpenClaw plugins).
+> **Listing a client's open tasks:** use `pkwork_status` with the client name — it already returns the active task arrays and the client's `slackChannelId`. `pkwork_raw GET /tasks?clientId=<id>` is only needed for full task objects across *all* statuses (the `status` filter takes one value at a time).
+>
+> An earlier build exposed 9 narrower tools (`pkwork_list_tasks`, `pkwork_create_task`, `pkwork_update_task`, …); the current build consolidates them into the 5 above.
+
+**Config:** API key is stored directly in `openclaw.json` under `plugins.entries.openclaw-pkwork.config.apiKey` (not env vars — they don't propagate reliably to OpenClaw plugins).
 
 ### OpenClaw Plugin: openclaw-mem0
 
@@ -285,17 +282,15 @@ gcloud firestore indexes composite list --project=workdotpk-a06dc
 firebase functions:secrets:set CLAUDE_API_KEY
 firebase functions:secrets:access CLAUDE_API_KEY
 
-# OpenClaw (Asty)
-launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/ai.openclaw.gateway.plist
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/ai.openclaw.gateway.plist
-# Or: launchctl kickstart -k gui/$(id -u)/ai.openclaw.gateway
+# OpenClaw (Asty) — runs on the Oracle Cloud VM (managed via systemd there).
+# See vm/README.md for VM setup (webhook receiver, ports, deploy steps).
 ```
 
 ## Known Gotchas
 
 1. **Firestore index errors:** If a new query combination returns 500, it's almost always a missing composite index. The error message includes a direct link to create it in the Firebase Console. Or add to `firestore.indexes.json` and deploy.
 
-2. **OpenClaw env vars:** Don't rely on `process.env` in OpenClaw plugins — LaunchAgent env vars don't propagate reliably. Put secrets directly in `openclaw.json` plugin config.
+2. **OpenClaw env vars:** Don't rely on `process.env` in OpenClaw plugins — env vars don't propagate reliably to plugins. Put secrets directly in `openclaw.json` plugin config.
 
 3. **Assignee migration:** Old tasks may have `assignee` (string), new ones have `assignees` (array). The `getAssignees()` helper in `functions/index.js` handles backward compat. The API accepts both formats on create.
 
@@ -321,9 +316,16 @@ External client users can log in via Google sign-in to view their org's tasks an
 
 ## Clients
 
-Current clients in Firestore:
-- SCC Online (SCC) — website redesign, content strategy
-- Hammock — brand identity, packaging
+11 clients in Firestore (each with its own Slack channel — see `slackChannelId`). Use `GET /clients` for the current list, IDs, and channel mappings.
+
+- Absentia Labs
+- Anant Art
 - Brunk — brand identity, social media
+- Colater
+- Hammock — brand identity, packaging
+- Mercury
 - Presentations.ai — SaaS product, blog content
 - Public Knowledge (internal) — studio website, internal tools
+- Samaritan Bio
+- SCC Online (SCC) — website redesign, content strategy
+- Sycamore

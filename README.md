@@ -198,11 +198,12 @@ An incoming webhook bot that posts formatted daily scrum summaries to `#daily-sc
 
 ### Asty (OpenClaw)
 
-An always-on AI studio manager that runs as an OpenClaw gateway. It connects to Slack via socket mode and has 9 tools wrapping the PK Work REST API:
+An always-on AI studio manager that runs as an OpenClaw gateway on an Oracle Cloud free-tier VM. It connects to Slack via socket mode, with 5 tools wrapping the PK Work REST API:
 
-- `pkwork_list_tasks`, `pkwork_create_task`, `pkwork_update_task`, `pkwork_delete_task`
-- `pkwork_scrum_summary`, `pkwork_submit_standup`, `pkwork_list_standups`
-- `pkwork_list_clients`, `pkwork_list_projects`
+- `pkwork_search` — search across clients, projects, people, tasks
+- `pkwork_status` — active-work digest by scope (client / person / today / studio-wide)
+- `pkwork_task_add`, `pkwork_task_set` — create and modify tasks
+- `pkwork_raw` — direct REST escape hatch
 
 Scheduled routines include daily briefings, scrum reminders, stale task detection, weekly recaps, and reference link archiving. See `CLAUDE.md` for full details.
 

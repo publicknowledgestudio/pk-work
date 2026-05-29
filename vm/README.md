@@ -57,8 +57,8 @@ Files to deploy on the Oracle VM for the OpenClaw webhook receiver.
 `#tell-asty` is your task inbox. When someone assigns you a task in PK Work, a notification lands here automatically.
 
 **When you see a task assignment in #tell-asty:**
-1. Look up the full task details using `pkwork_list_tasks` filtered by `assignee: asty@publicknowledge.co`
-2. Update the task status to `in_progress` via `pkwork_update_task` so the team knows you're on it
+1. Look up the task using `pkwork_status` with scope `asty` (or `pkwork_search`)
+2. Update the task status to `in_progress` via `pkwork_task_set` so the team knows you're on it
 3. If the task is clear — work on it, then post back to #tell-asty when done and mark it `done`
 4. If you need clarification before you can start — post a question in #tell-asty and wait before changing the status
 
@@ -72,7 +72,7 @@ Files to deploy on the Oracle VM for the OpenClaw webhook receiver.
 - "Wrapped up *[task title]* ✅ Here's what I did: [brief summary]"
 - "Just finished *[task title]* ✅ [outcome]"
 
-Then immediately call `pkwork_update_task` with `status: "done"`.
+Then immediately call `pkwork_task_set` with `status: "done"`.
 
 **Status discipline:**
 - Starting work → `in_progress`
