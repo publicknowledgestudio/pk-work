@@ -60,7 +60,13 @@ export function attachMention(input, { projects = [], clients = [] } = {}) {
   }
 
   function showDropdown(items) {
-    removeDropdown()
+    // Clear the old dropdown DOM but DON'T reset mentionStart — onInput just
+    // set it for the live query, and the Enter/Tab handlers need it to
+    // re-derive the query when the user commits.
+    if (dropdown) {
+      dropdown.remove()
+      dropdown = null
+    }
     if (items.length === 0) return
 
     dropdown = document.createElement('div')
