@@ -19,7 +19,7 @@ export function attachMention(input, { projects = [], clients = [] } = {}) {
     const q = query.toLowerCase()
     const people = TEAM
       .filter((m) => !tags.assignees.includes(m.email))
-      .filter((m) => m.name.toLowerCase().includes(q) || m.email.toLowerCase().includes(q))
+      .filter((m) => m.name.toLowerCase().includes(q))
       .map((m) => ({ type: 'person', id: m.email, name: m.name, color: m.color, photoURL: m.photoURL }))
 
     // Match by project name OR by client name (typing a client name expands
