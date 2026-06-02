@@ -20,8 +20,10 @@ export const TEAM = [
   { email: 'anandu@publicknowledge.co', name: 'Anandu', color: '#ea580c', role: 'member' },
   { email: 'mohit@publicknowledge.co', name: 'Mohit', color: '#059669', role: 'member' },
   { email: 'rakesh@publicknowledge.co', name: 'Rakesh', color: '#d97706', role: 'member' },
-  { email: 'saurabh@publicknowledge.co', name: 'Saurabh', color: '#db2777', role: 'member' },
+  // Only on one project and doesn't use this tool — restore if that changes
+  // { email: 'saurabh@publicknowledge.co', name: 'Saurabh', color: '#db2777', role: 'member' },
   { email: 'ananya@publicknowledge.co', name: 'Ananya', color: '#65a30d', role: 'member' },
+  { email: 'vyshnav@publicknowledge.co', name: 'Vyshnav', color: '#7c3aed', role: 'member' },
 ]
 
 // Task statuses and their display config
