@@ -35,7 +35,6 @@ export async function renderMyDay(container, tasks, currentUser, ctx) {
 
   const now = new Date()
   todayStr = now.toISOString().split('T')[0]
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
 
   // Compute current week (Mon-Sun)
   const dayOfWeek = now.getDay() // 0=Sun, 1=Mon...
@@ -126,10 +125,6 @@ export async function renderMyDay(container, tasks, currentUser, ctx) {
     weekData[todayStr].taskIds = focusTaskIds
   }
 
-  const focusTasks = (isOwnDay ? validFocusIds : focusTaskIds)
-    .map((id) => tasks.find((t) => t.id === id))
-    .filter(Boolean)
-
   // Build set of all tasks assigned to a weekday (current + next week)
   const weekTaskIdSet = new Set()
   for (const wd of Object.values(weekData)) {
@@ -173,14 +168,6 @@ export async function renderMyDay(container, tasks, currentUser, ctx) {
       !weekTaskIdSet.has(t.id)
     )
     .sort((a, b) => priorityWeight(b.priority) - priorityWeight(a.priority))
-
-  // Completed today for viewed user (still used for stats)
-  const completedToday = tasks.filter((t) => {
-    if (t.status !== 'done' || !t.closedAt) return false
-    if (!(t.assignees || []).includes(targetEmail)) return false
-    const closed = toDate(t.closedAt)
-    return closed >= todayStart
-  })
 
   // Determine the calendar date (default: today)
   const calDate = calendarDate || now
@@ -268,10 +255,6 @@ export async function renderMyDay(container, tasks, currentUser, ctx) {
               <span class="week-nav-label" id="week-label">${weekRangeStr}</span>
               <button class="week-nav-btn" id="week-next" title="Next week"><i class="ph ph-caret-right"></i></button>
             </div>
-          </div>
-          <div class="my-day-stats">
-            <span class="my-day-stat"><i class="ph-fill ph-target"></i> ${focusTasks.length} planned</span>
-            <span class="my-day-stat"><i class="ph-fill ph-check-circle"></i> ${completedToday.length} done today</span>
           </div>
         </div>
 
