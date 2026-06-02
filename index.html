@@ -68,9 +68,16 @@
                 <div class="header-filter-list" id="header-filter-list"></div>
               </div>
             </div>
-            <select id="filter-assignee" class="filter-select">
-              <option value="">Everyone</option>
-            </select>
+            <div id="header-assignee-filter" class="header-filter-picker">
+              <div class="header-filter-display" id="assignee-filter-display">
+                <span class="header-filter-text" id="assignee-filter-text">Everyone</span>
+                <button class="header-filter-clear hidden" id="assignee-filter-clear" type="button">&times;</button>
+                <i class="ph ph-caret-down header-filter-arrow"></i>
+              </div>
+              <div class="header-filter-dropdown hidden" id="assignee-filter-dropdown">
+                <div class="header-filter-list" id="assignee-filter-list"></div>
+              </div>
+            </div>
           </div>
           <div class="user-menu" id="user-menu">
             <button class="user-menu-trigger" id="user-menu-trigger">

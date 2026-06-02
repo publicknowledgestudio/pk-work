@@ -351,23 +351,6 @@ body {
   gap: 8px;
 }
 
-.filter-select {
-  padding: 5px 8px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  font-family: var(--font);
-  font-size: 16px;
-  color: var(--text-secondary);
-  background: var(--surface);
-  cursor: pointer;
-  max-width: 130px;
-}
-
-.filter-select:focus {
-  outline: none;
-  border-color: var(--primary);
-}
-
 /* Header project filter picker */
 .header-filter-picker {
   position: relative;
@@ -557,6 +540,20 @@ body {
 
 .header-filter-option.selected {
   background: var(--primary-light);
+}
+
+/* Assignee filter options — single-select, reuses .header-filter-option */
+.assignee-filter-option {
+  padding-left: 10px;
+}
+
+.avatar-everyone {
+  background: var(--text-tertiary);
+  color: white;
+}
+
+.assignee-filter-option .avatar-xs i {
+  font-size: 13px;
 }
 
 .header-filter-group-label {

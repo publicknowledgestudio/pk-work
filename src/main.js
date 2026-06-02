@@ -128,7 +128,14 @@ const logoutBtn = document.getElementById('logout-btn')
 const userAvatar = document.getElementById('user-avatar')
 const mainContent = document.getElementById('main-content')
 const navTabs = document.querySelectorAll('.nav-tab')
-const filterAssignee = document.getElementById('filter-assignee')
+// Header assignee filter picker refs (single-select, styled to match the project picker)
+const afPicker = document.getElementById('header-assignee-filter')
+const afDisplay = document.getElementById('assignee-filter-display')
+const afText = document.getElementById('assignee-filter-text')
+const afClear = document.getElementById('assignee-filter-clear')
+const afDropdown = document.getElementById('assignee-filter-dropdown')
+const afList = document.getElementById('assignee-filter-list')
+let selectedAssignee = ''
 
 // Header project filter picker refs
 const hfPicker = document.getElementById('header-project-filter')
@@ -696,7 +703,85 @@ function syncMobileNav() {
 }
 
 // Filters
-filterAssignee.addEventListener('change', renderCurrentView)
+// Header assignee filter picker (single-select)
+afDisplay.addEventListener('click', () => {
+  if (afDropdown.classList.contains('hidden')) {
+    openAssigneeFilter()
+  } else {
+    closeAssigneeFilter()
+  }
+})
+
+afClear.addEventListener('click', (e) => {
+  e.stopPropagation()
+  selectAssignee('')
+})
+
+document.addEventListener('mousedown', (e) => {
+  if (!afPicker.contains(e.target) && !afDropdown.classList.contains('hidden')) {
+    closeAssigneeFilter()
+  }
+})
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !afDropdown.classList.contains('hidden')) {
+    closeAssigneeFilter()
+  }
+})
+
+function openAssigneeFilter() {
+  renderAssigneeFilterList()
+  afDropdown.classList.remove('hidden')
+  afPicker.classList.add('open')
+}
+
+function closeAssigneeFilter() {
+  afDropdown.classList.add('hidden')
+  afPicker.classList.remove('open')
+}
+
+function selectAssignee(email) {
+  selectedAssignee = email
+  updateAssigneeFilterDisplay()
+  closeAssigneeFilter()
+  renderCurrentView()
+}
+
+function updateAssigneeFilterDisplay() {
+  if (!selectedAssignee) {
+    afText.textContent = 'Everyone'
+    afText.classList.remove('active')
+    afClear.classList.add('hidden')
+  } else {
+    const m = TEAM.find((t) => t.email === selectedAssignee)
+    afText.textContent = m?.name || selectedAssignee
+    afText.classList.add('active')
+    afClear.classList.remove('hidden')
+  }
+}
+
+function assigneeAvatar(member) {
+  if (!member) {
+    return `<span class="avatar-xs avatar-everyone"><i class="ph-fill ph-users-three"></i></span>`
+  }
+  if (member.photoURL) {
+    return `<img class="avatar-photo-xs" src="${member.photoURL}" alt="${esc(member.name)}">`
+  }
+  return `<span class="avatar-xs" style="background:${member.color}">${esc(member.name[0])}</span>`
+}
+
+function renderAssigneeFilterList() {
+  const rows = [{ email: '', member: null, label: 'Everyone' }]
+    .concat(TEAM.map((m) => ({ email: m.email, member: m, label: m.name })))
+  afList.innerHTML = rows.map((r) => `
+    <div class="header-filter-option assignee-filter-option${r.email === selectedAssignee ? ' selected' : ''}" data-email="${r.email}">
+      ${assigneeAvatar(r.member)}
+      <span>${esc(r.label)}</span>
+    </div>`).join('')
+  afList.querySelectorAll('.assignee-filter-option').forEach((opt) => {
+    opt.addEventListener('click', () => selectAssignee(opt.dataset.email))
+  })
+}
 
 // Header project filter picker (multiselect)
 hfDisplay.addEventListener('click', () => {
@@ -867,10 +952,8 @@ function renderHeaderFilterList(query) {
 
 function populateFilters() {
   // Assignee filter
-  filterAssignee.innerHTML = '<option value="">Everyone</option>'
-  TEAM.forEach((m) => {
-    filterAssignee.innerHTML += `<option value="${m.email}">${m.name}</option>`
-  })
+  selectedAssignee = ''
+  updateAssigneeFilterDisplay()
   // Reset header filter state
   selectedFilterIds.clear()
   updateHeaderFilterDisplay()
@@ -884,7 +967,7 @@ function esc(str) {
 
 function getFilteredTasks() {
   let tasks = allTasks
-  const assignee = filterAssignee.value
+  const assignee = selectedAssignee
 
   if (selectedFilterIds.size > 0) {
     tasks = tasks.filter((t) => selectedFilterIds.has(t.projectId))
