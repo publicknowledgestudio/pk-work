@@ -1275,31 +1275,38 @@ body {
 .my-day-greeting-row {
   display: flex;
   align-items: center;
+  margin-bottom: 4px;
+}
+
+.my-day-greeting-trigger {
+  all: unset;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
   gap: 6px;
+  padding: 2px 8px 2px 6px;
+  margin-left: -6px;
+  border-radius: 8px;
+  color: var(--text);
+  transition: background 0.15s;
+}
+
+.my-day-greeting-trigger:hover {
+  background: var(--hover);
 }
 
 .my-day-greeting {
   font-size: 20px;
   font-weight: 700;
-  margin-bottom: 4px;
 }
 
-.myday-person-toggle {
-  all: unset;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
+.myday-person-caret {
+  font-size: 14px;
   color: var(--text-secondary);
-  transition: background 0.15s, color 0.15s;
-  margin-bottom: 2px;
+  transition: color 0.15s;
 }
 
-.myday-person-toggle:hover {
-  background: var(--hover);
+.my-day-greeting-trigger:hover .myday-person-caret {
   color: var(--text);
 }
 

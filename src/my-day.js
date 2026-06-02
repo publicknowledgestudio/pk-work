@@ -245,9 +245,9 @@ export async function renderMyDay(container, tasks, currentUser, ctx) {
         <div class="my-day-header">
           <div>
             <div class="my-day-greeting-row">
-              <h2 class="my-day-greeting">${greetingText}</h2>
-              <button class="myday-person-toggle" id="myday-person-toggle" title="View another person's day">
-                <i class="ph-fill ph-caret-down"></i>
+              <button class="my-day-greeting-trigger" id="myday-person-toggle" title="View another person's day">
+                <span class="my-day-greeting">${greetingText}</span>
+                <i class="ph-fill ph-caret-down myday-person-caret"></i>
               </button>
             </div>
             <div class="my-day-date week-nav">
