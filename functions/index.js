@@ -282,14 +282,28 @@ async function createTask(req, res) {
   const data = req.body
   if (!data.title) return res.status(400).json({ error: 'title is required' })
 
-  // Resolve human-readable names to ids/emails where provided
+  // Resolve human-readable names to ids/emails where provided.
+  // An unresolvable name is a 400 (with valid names listed) rather than a
+  // silently unfiled task — callers like Asty need actionable feedback.
   let clientId = data.clientId || ''
   if (!clientId && data.clientName) {
     clientId = (await resolveClientId(data.clientName)) || ''
+    if (!clientId) {
+      const snap = await db.collection('clients').get()
+      const clients = snap.docs.map((d) => d.data().name).filter(Boolean).sort()
+      return res.status(400).json({ error: `Unknown client: ${data.clientName}`, clients })
+    }
   }
   let projectId = data.projectId || ''
   if (!projectId && data.projectName) {
     projectId = (await resolveProjectId(data.projectName, clientId)) || ''
+    if (!projectId) {
+      let q = db.collection('projects')
+      if (clientId) q = q.where('clientId', '==', clientId)
+      const snap = await q.get()
+      const projects = snap.docs.map((d) => d.data().name).filter(Boolean).sort()
+      return res.status(400).json({ error: `Unknown project: ${data.projectName}`, projects })
+    }
   }
   const assigneesRaw = data.assignees || (data.assignee ? [data.assignee] : [])
   const assignees = await resolveAssignees(assigneesRaw)
@@ -318,15 +332,29 @@ async function updateTask(req, res, taskId) {
   const data = req.body
   const update = { ...data, updatedAt: admin.firestore.FieldValue.serverTimestamp() }
 
-  // Resolve name fields if provided
+  // Resolve name fields if provided. Unresolvable names are a 400, not a
+  // silently dropped field — callers like Asty need actionable feedback.
   if (data.clientName && !data.clientId) {
     const cid = await resolveClientId(data.clientName)
-    if (cid) update.clientId = cid
+    if (!cid) {
+      const snap = await db.collection('clients').get()
+      const clients = snap.docs.map((d) => d.data().name).filter(Boolean).sort()
+      return res.status(400).json({ error: `Unknown client: ${data.clientName}`, clients })
+    }
+    update.clientId = cid
     delete update.clientName
   }
   if (data.projectName && !data.projectId) {
     const pid = await resolveProjectId(data.projectName, update.clientId || data.clientId)
-    if (pid) update.projectId = pid
+    if (!pid) {
+      let q = db.collection('projects')
+      const cid = update.clientId || data.clientId
+      if (cid) q = q.where('clientId', '==', cid)
+      const snap = await q.get()
+      const projects = snap.docs.map((d) => d.data().name).filter(Boolean).sort()
+      return res.status(400).json({ error: `Unknown project: ${data.projectName}`, projects })
+    }
+    update.projectId = pid
     delete update.projectName
   }
   if (data.assignee && !data.assignees) {
@@ -1446,16 +1474,19 @@ async function listLeaves(req, res) {
 async function createLeave(req, res) {
   const data = req.body
   if (!data.userEmail) return res.status(400).json({ error: 'userEmail is required' })
-  if (!data.type || !['personal', 'medical'].includes(data.type)) {
-    return res.status(400).json({ error: 'type must be "personal" or "medical"' })
+  if (!data.type || !['personal', 'medical', 'overtime'].includes(data.type)) {
+    return res.status(400).json({ error: 'type must be "personal", "medical" or "overtime"' })
   }
   if (!data.startDate) return res.status(400).json({ error: 'startDate is required' })
 
   const endDate = data.endDate || data.startDate
   const halfDay = !!data.halfDay
-  const days = halfDay ? 0.5 : countWeekdays(data.startDate, endDate)
+  // Overtime falls on off-days, so countWeekdays would yield 0 — it's a
+  // single-day credit (matches the attendance UI), not paid leave.
+  const isOvertime = data.type === 'overtime'
+  const days = halfDay ? 0.5 : isOvertime ? 1 : countWeekdays(data.startDate, endDate)
 
-  let paidDays = days
+  let paidDays = isOvertime ? 0 : days
   let unpaidDays = 0
 
   if (data.type === 'personal') {
