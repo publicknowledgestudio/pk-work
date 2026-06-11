@@ -35,6 +35,7 @@ const CLAUDE_API_KEY = defineSecret('CLAUDE_API_KEY')
 const SLACK_BOT_TOKEN = defineSecret('SLACK_BOT_TOKEN')
 const OPENCLAW_WEBHOOK_URL = defineSecret('OPENCLAW_WEBHOOK_URL')
 const OPENCLAW_WEBHOOK_SECRET = defineSecret('OPENCLAW_WEBHOOK_SECRET')
+const POKE_MCP_KEY = defineSecret('POKE_MCP_KEY')
 
 const LEAVES_CHANNEL_ID = 'C09U7GVJ31R'
 const LEAVE_NOTIFY_TYPES = new Set(['personal', 'medical', 'overtime'])
@@ -704,6 +705,21 @@ function notifyOpenClaw(taskId, task, action) {
     body: JSON.stringify(payload),
   }).catch((err) => console.error('OpenClaw webhook error:', err))
 }
+
+// === MCP bridge — PK Work as an MCP server (for Poke and other MCP clients) ===
+// POST https://us-central1-workdotpk-a06dc.cloudfunctions.net/mcp
+// Auth: Authorization: Bearer <POKE_MCP_KEY>. See functions/mcp.js.
+
+const { createMcpHandler } = require('./mcp')
+
+exports.mcp = onRequest(
+  { secrets: [CLAUDE_API_KEY, POKE_MCP_KEY] },
+  createMcpHandler({
+    getInternalApiKey: () => process.env.CLAUDE_API_KEY,
+    getPokeKey: () => process.env.POKE_MCP_KEY,
+    apiBase: 'https://us-central1-workdotpk-a06dc.cloudfunctions.net/api',
+  })
+)
 
 // === Firestore Trigger — Notify OpenClaw on key task events ===
 
