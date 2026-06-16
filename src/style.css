@@ -1549,6 +1549,32 @@ body {
   color: var(--text-tertiary);
 }
 
+/* Collapsible accordion sections (Unscheduled + weekdays) */
+.my-day-section[data-section] .my-day-section-header {
+  cursor: pointer;
+  user-select: none;
+}
+
+.my-day-collapse-caret {
+  margin-left: auto;
+  font-size: 12px !important;
+  color: var(--text-tertiary);
+  transition: transform 0.15s;
+}
+
+.my-day-section-header:hover .my-day-collapse-caret {
+  color: var(--text-secondary);
+}
+
+.my-day-section.collapsed .my-day-collapse-caret {
+  transform: rotate(-90deg);
+}
+
+.my-day-section.collapsed .my-day-upnext-list,
+.my-day-section.collapsed .my-day-weekday-list {
+  display: none;
+}
+
 /* Focus, Up Next & Weekday drop zones */
 .my-day-focus-list,
 .my-day-upnext-list,

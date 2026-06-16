@@ -23,6 +23,20 @@ let renderAC = null
 
 export function resetWeekOffset() { weekOffset = 0 }
 
+// Collapsed accordion sections on the My Week view, persisted across renders/sessions.
+let collapsedSections = null
+const COLLAPSE_KEY = 'pkwork.myweek.collapsed'
+function getCollapsed() {
+  if (!collapsedSections) {
+    try { collapsedSections = new Set(JSON.parse(localStorage.getItem(COLLAPSE_KEY) || '[]')) }
+    catch { collapsedSections = new Set() }
+  }
+  return collapsedSections
+}
+function saveCollapsed() {
+  try { localStorage.setItem(COLLAPSE_KEY, JSON.stringify([...getCollapsed()])) } catch {}
+}
+
 export async function renderMyDay(container, tasks, currentUser, ctx) {
   renderAC?.abort()
   renderAC = new AbortController()
@@ -283,11 +297,12 @@ export async function renderMyDay(container, tasks, currentUser, ctx) {
         ` : ''}
 
         <!-- Unscheduled Section -->
-        <div class="my-day-section">
+        <div class="my-day-section${getCollapsed().has('unscheduled') ? ' collapsed' : ''}" data-section="unscheduled">
           <div class="my-day-section-header">
             <i class="ph-fill ph-queue" style="color:#3b82f6"></i>
             <span>Unscheduled</span>
             <span class="my-day-count">${filteredUpNext.length}</span>
+            <i class="ph ph-caret-down my-day-collapse-caret"></i>
           </div>
           <div class="my-day-upnext-list" data-drop="upnext">
             ${filteredUpNext.length > 0 ? filteredUpNext.map((t) => upNextCard(t, ctx, now, isOwnDay, scheduledSet.has(t.id))).join('') : `
@@ -308,12 +323,13 @@ export async function renderMyDay(container, tasks, currentUser, ctx) {
           const shortDate = wd.date.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })
           const dayLabel = wd.isToday ? `Today · ${wd.label}` : `${wd.label} · ${shortDate}`
           return `
-          <div class="my-day-section${wd.isPast && !wd.isToday ? ' day-past' : ''}${wd.isToday ? ' day-today' : ''}${wd.isWeekend ? ' day-weekend' : ''}">
+          <div class="my-day-section${wd.isPast && !wd.isToday ? ' day-past' : ''}${wd.isToday ? ' day-today' : ''}${wd.isWeekend ? ' day-weekend' : ''}${getCollapsed().has(wd.label) ? ' collapsed' : ''}" data-section="${wd.label}">
             <div class="my-day-section-header">
               <i class="${dayIcon}" style="color:${dayColor}"></i>
               <span>${dayLabel}</span>
               ${holiday ? `<span class="my-week-holiday-badge"><i class="ph-fill ph-flag-pennant"></i> ${esc(holiday)}</span>` : ''}
               <span class="my-day-count">${dayTasks.length}</span>
+              <i class="ph ph-caret-down my-day-collapse-caret"></i>
             </div>
             <div class="my-day-weekday-list" data-drop="weekday" data-date="${wd.dateStr}">
               ${dayTasks.length > 0 ? dayTasks.map((t) => weekdayCard(t, ctx, now, isOwnDay, wd.dateStr, wd.isPast)).join('') : `
@@ -428,6 +444,18 @@ function weekdayCard(task, ctx, now, isOwnDay, dateStr, isPast) {
 function bindMyDayActions(container, tasks, currentUser, ctx, now, isOwnDay, { calDateStr, isCalToday, calFocusTaskIds, calTimeBlocks, renderSignal } = {}) {
   const myEmail = currentUser?.email
   const targetEmail = viewingEmail || myEmail
+
+  // Collapsible accordion sections (Unscheduled + weekdays)
+  container.querySelectorAll('.my-day-section[data-section] .my-day-section-header').forEach((header) => {
+    header.addEventListener('click', () => {
+      const section = header.closest('.my-day-section')
+      const key = section.dataset.section
+      const collapsed = getCollapsed()
+      if (section.classList.toggle('collapsed')) collapsed.add(key)
+      else collapsed.delete(key)
+      saveCollapsed()
+    })
+  })
 
   // Client filter tabs
   container.querySelectorAll('.client-tab').forEach((tab) => {
@@ -737,7 +765,7 @@ function bindMyDayActions(container, tasks, currentUser, ctx, now, isOwnDay, { c
   const onMarqueeDown = (e) => {
     // Only start marquee on background — not on cards, buttons, inputs, scrollbars, menus
     if (e.button !== 0) return
-    if (e.target.closest('.my-day-card, .task-card, button, input, a, .ctx-menu, .my-week-client-tabs, .my-day-header, .tg-slot, .tg-block')) return
+    if (e.target.closest('.my-day-card, .task-card, button, input, a, .ctx-menu, .my-week-client-tabs, .my-day-header, .my-day-section-header, .tg-slot, .tg-block')) return
 
     // Clear previous selection
     clearSelection()
