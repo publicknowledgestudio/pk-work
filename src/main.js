@@ -7,7 +7,7 @@ import {
   signOut,
 } from 'firebase/auth'
 import { getFirestore } from 'firebase/firestore'
-import { firebaseConfig, TEAM, STATUSES } from './config.js'
+import { firebaseConfig, TEAM, STATUSES, googleOAuthClientId } from './config.js'
 import { loadClients, loadClientById, loadProjects, loadProjectsByClient, loadPeople, subscribeToTasks, saveUserProfile, loadUserProfiles, updateTask, loadClientUser, subscribeToTasksByClient, setCurrentUser } from './db.js'
 import { renderBoard, renderBoardByAssignee, renderBoardByClient, renderBoardByProject } from './board.js'
 import { renderBacklog } from './backlog.js'
@@ -18,7 +18,7 @@ import { renderReferences, cleanupReferences } from './references.js'
 import { renderTimesheets } from './timesheets.js'
 import { openModal } from './modal.js'
 import { initContextMenu } from './context-menu.js'
-import { setAccessToken, clearAccessToken } from './calendar.js'
+import { setAccessToken, clearAccessToken, ensureCalendarToken } from './calendar.js'
 import { renderClientBoard } from './client-board.js'
 import { renderClientTimesheets } from './client-timesheets.js'
 import { renderClientTimeline } from './client-timeline.js'
@@ -419,6 +419,13 @@ const calendarProvider = new GoogleAuthProvider()
 calendarProvider.addScope('https://www.googleapis.com/auth/calendar.events.readonly')
 
 export async function reconnectCalendar() {
+  // Prefer Google Identity Services — granting consent here lets us silently
+  // refresh the token on later loads with no popup. Falls back to the Firebase
+  // popup when no GIS client id is configured.
+  if (googleOAuthClientId) {
+    const tok = await ensureCalendarToken({ interactive: true, hint: currentUser?.email })
+    return !!tok
+  }
   try {
     const result = await signInWithPopup(auth, calendarProvider)
     const credential = GoogleAuthProvider.credentialFromResult(result)

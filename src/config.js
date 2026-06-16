@@ -10,6 +10,16 @@ export const firebaseConfig = {
   appId: '1:764388053600:web:2e761bac21bacc8d3de905',
 }
 
+// OAuth 2.0 Web client ID, used by Google Identity Services to silently refresh
+// the calendar access token (no popup) on the My Week view.
+// Find it in Google Cloud Console → APIs & Services → Credentials →
+// "Web client (auto created by Google Service)" → Client ID (ends in
+// .apps.googleusercontent.com). The client's "Authorized JavaScript origins"
+// must include https://work.publicknowledge.co, https://workdotpk-a06dc.web.app,
+// and http://localhost:3000. Leave empty to fall back to the Firebase sign-in
+// popup for calendar connect (no silent refresh).
+export const googleOAuthClientId = ''
+
 // Team members. Engagement dates live in the Firestore `contracts`
 // collection — see src/contracts.js and src/utils/contracts.js.
 export const TEAM = [

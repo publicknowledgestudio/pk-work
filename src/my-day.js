@@ -2,7 +2,7 @@ import { TEAM, STATUSES } from './config.js'
 import { updateTask, createTask, loadDailyFocus, saveDailyFocus, loadHolidays } from './db.js'
 import { openModal } from './modal.js'
 import { attachMention } from './mention.js'
-import { loadCalendarEvents } from './calendar.js'
+import { loadCalendarEvents, ensureCalendarToken, getAccessToken } from './calendar.js'
 import { renderTimeGrid, bindTimeGridActions, isTimeGridDragging } from './time-grid.js'
 import { setSelectedTaskIds, clearSelection } from './context-menu.js'
 import { toDate, formatShortDate } from './utils/dates.js'
@@ -35,6 +35,15 @@ function getCollapsed() {
 }
 function saveCollapsed() {
   try { localStorage.setItem(COLLAPSE_KEY, JSON.stringify([...getCollapsed()])) } catch {}
+}
+
+// Whether the right-hand calendar panel is expanded. Collapsed by default.
+const CAL_OPEN_KEY = 'pkwork.myweek.calendarOpen'
+function getCalendarOpen() {
+  try { return localStorage.getItem(CAL_OPEN_KEY) === '1' } catch { return false }
+}
+function setCalendarOpen(v) {
+  try { localStorage.setItem(CAL_OPEN_KEY, v ? '1' : '0') } catch {}
 }
 
 export async function renderMyDay(container, tasks, currentUser, ctx) {
@@ -200,10 +209,17 @@ export async function renderMyDay(container, tasks, currentUser, ctx) {
     .map((id) => tasks.find((t) => t.id === id))
     .filter(Boolean)
 
-  // Load calendar events (only for own day)
+  // Load calendar events (only for own day, and only when the panel is open —
+  // skip the API call entirely while collapsed so we don't ping Google on load)
+  const calendarOpen = getCalendarOpen()
   let calendarEvents = []
   let calendarNeedsAuth = false
-  if (isOwnDay) {
+  if (isOwnDay && calendarOpen) {
+    // Try a silent, no-popup token refresh if we don't have a valid one
+    // (e.g. it expired since last load) before falling back to the connect button.
+    if (!getAccessToken()) {
+      await ensureCalendarToken({ interactive: false, hint: myEmail })
+    }
     const cal = await loadCalendarEvents(calDateStr)
     calendarEvents = cal.events
     calendarNeedsAuth = cal.needsAuth
@@ -254,7 +270,7 @@ export async function renderMyDay(container, tasks, currentUser, ctx) {
   const scheduledSet = new Set(timeBlocks.map((b) => b.taskId))
 
   container.innerHTML = `
-    <div class="my-day">
+    <div class="my-day${calendarOpen ? '' : ' calendar-collapsed'}">
       <div class="my-day-left">
         <div class="my-day-header">
           <div>
@@ -270,6 +286,12 @@ export async function renderMyDay(container, tasks, currentUser, ctx) {
               <button class="week-nav-btn" id="week-next" title="Next week"><i class="ph ph-caret-right"></i></button>
             </div>
           </div>
+          ${isOwnDay ? `
+          <button class="myday-cal-toggle${calendarOpen ? ' active' : ''}" id="myday-cal-toggle" title="${calendarOpen ? 'Hide calendar' : 'Show calendar'}">
+            <i class="ph${calendarOpen ? '-fill' : ''} ph-calendar-blank"></i>
+            <span>Calendar</span>
+          </button>
+          ` : ''}
         </div>
 
         ${activeClients.length > 0 ? `
@@ -456,6 +478,15 @@ function bindMyDayActions(container, tasks, currentUser, ctx, now, isOwnDay, { c
       saveCollapsed()
     })
   })
+
+  // Calendar panel show/hide toggle (persisted, collapsed by default)
+  const calToggle = container.querySelector('#myday-cal-toggle')
+  if (calToggle) {
+    calToggle.addEventListener('click', () => {
+      setCalendarOpen(!getCalendarOpen())
+      renderMyDay(container, tasks, currentUser, ctx)
+    })
+  }
 
   // Client filter tabs
   container.querySelectorAll('.client-tab').forEach((tab) => {

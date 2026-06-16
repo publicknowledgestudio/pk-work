@@ -1261,6 +1261,44 @@ body {
   flex-direction: column;
 }
 
+/* Collapsed calendar: hide the panel, let the task column take the full width */
+.my-day.calendar-collapsed .my-day-right {
+  display: none;
+}
+
+/* Calendar show/hide toggle button in the header */
+.myday-cal-toggle {
+  margin-left: auto;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.myday-cal-toggle:hover {
+  border-color: var(--primary);
+  color: var(--text-primary);
+}
+
+.myday-cal-toggle.active {
+  background: var(--primary-light);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.myday-cal-toggle i {
+  font-size: 15px;
+}
+
 .my-day-header {
   display: flex;
   align-items: flex-start;
