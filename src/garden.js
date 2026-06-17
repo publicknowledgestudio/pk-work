@@ -22,6 +22,8 @@ const WILT_LEAD = 9_000 // start wilting in the last ~9s
 const PRUNE_GRACE = 15_000 // any client deletes RTDB nodes older than LIFETIME + this
 const WRITE_MS = 45 // cursor write throttle (~22/sec)
 const MAX_LEN = 240
+const PLANT_Y_MIN = 0.52 // keep planted flowers in the lower garden zone…
+const PLANT_Y_MAX = 0.9 // …above the grass line, clear of the header controls
 
 // Figma/Liveblocks-style cursor arrow.
 const CURSOR_SVG = '<svg width="22" height="30" viewBox="0 0 24 36" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M5.65 12.37H5.46l-.14.13L.5 16.88V1.2l11.28 11.17H5.65Z" fill="currentColor" stroke="#fff" stroke-width="1.2" stroke-linejoin="round"/></svg>'
@@ -250,6 +252,10 @@ function removeMyCursor() {
 
 function openTyping(x, y, initial) {
   closeTyping()
+  // Anchor plantings into the lower "garden" zone: flowers grow up from the
+  // grass, and bubbles stay clear of the greeting/Calendar controls up top.
+  x = clamp(x, 0.08, 0.92)
+  y = clamp(y, PLANT_Y_MIN, PLANT_Y_MAX)
   const wrap = document.createElement('div')
   wrap.className = 'garden-typing'
   wrap.style.setProperty('--c', cfg.user.color)
@@ -448,7 +454,8 @@ function updateGhosts(w, h) {
     const text = lines[Math.floor(t / 1000) % lines.length]
     addLocalMessage('ghost_' + Math.floor(t), {
       uid: g.uid, name: g.c.name, color: g.c.color, text,
-      x: g.c.x, y: g.c.y, plant: PLANTS[Math.floor(t / 700) % PLANTS.length], plantedAt: Date.now(),
+      x: clamp(g.c.x, 0.08, 0.92), y: clamp(g.c.y, PLANT_Y_MIN, PLANT_Y_MAX),
+      plant: PLANTS[Math.floor(t / 700) % PLANTS.length], plantedAt: Date.now(),
     })
     nextGhostPlant = Date.now() + 14000
   }
