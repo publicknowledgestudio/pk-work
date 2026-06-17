@@ -364,7 +364,11 @@ function reconcileMessages(data) {
 
 function addLocalMessage(id, d) {
   if (messages.has(id)) return
-  const m = { ...d, el: null }
+  // Lifetime is measured from when THIS client first renders the message, using
+  // our own clock — never the server's plantedAt against our clock. That cross-
+  // clock comparison made messages vanish on any client whose clock led the
+  // server (a skewed wall clock = the message looked "born expired").
+  const m = { ...d, el: null, shownAt: Date.now() }
   messages.set(id, m)
   ensureFlowerEl(id, m)
 }
@@ -424,7 +428,7 @@ function loop() {
   // Position flowers + handle wilting / expiry
   const now = Date.now()
   for (const [id, m] of messages) {
-    const age = now - (m.plantedAt || now)
+    const age = now - (m.shownAt || now)
     if (age > LIFETIME + PRUNE_GRACE) { deleteMessage(id); continue }
     if (age > LIFETIME) { if (m.el) m.el.style.opacity = '0'; if (id.startsWith('ghost_') || id.startsWith('local_')) { m.el?.remove(); messages.delete(id) } continue }
     if (m.el) {
