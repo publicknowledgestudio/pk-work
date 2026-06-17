@@ -312,9 +312,16 @@ function plantMessage(text, x, y) {
     uid: cfg.user.uid, name: cfg.user.name, color: cfg.user.color,
     text: text.slice(0, MAX_LEN), x, y, plant,
   }
+  console.log('[garden] plantMessage', { hasRdb: !!rdb, hasRef: !!messagesRef, payload })
   if (rdb && messagesRef) {
-    const r = rdb.push(messagesRef)
-    rdb.set(r, { ...payload, plantedAt: rdb.serverTimestamp() }).catch(() => {})
+    try {
+      const r = rdb.push(messagesRef)
+      rdb.set(r, { ...payload, plantedAt: rdb.serverTimestamp() })
+        .then(() => console.log('[garden] plant write OK →', r.key))
+        .catch((e) => console.error('[garden] plant write REJECTED:', e?.code || e?.message, e))
+    } catch (e) {
+      console.error('[garden] plant write THREW synchronously:', e)
+    }
   } else {
     addLocalMessage('local_' + Math.floor(performance.now()) + '_' + messages.size, { ...payload, plantedAt: Date.now() })
   }
@@ -351,6 +358,7 @@ function reconcileCursors(data) {
 }
 
 function reconcileMessages(data) {
+  console.log('[garden] messages onValue:', Object.keys(data || {}).length, 'in db')
   const seen = new Set()
   for (const id in data) {
     seen.add(id)
