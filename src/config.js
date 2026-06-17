@@ -12,7 +12,7 @@ export const firebaseConfig = {
   // Realtime Database in the Firebase console (US region) and paste its URL
   // here, e.g. 'https://workdotpk-a06dc-default-rtdb.firebaseio.com'. Leave
   // empty and the garden runs local-only (your own cursor + a demo gardener).
-  databaseURL: '',
+  databaseURL: 'https://workdotpk-a06dc-default-rtdb.asia-southeast1.firebasedatabase.app',
 }
 
 // OAuth 2.0 Web client ID, used by Google Identity Services to silently refresh
