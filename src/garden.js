@@ -125,7 +125,7 @@ function buildRoot() {
     <div class="garden-grass">${grassMarkup()}</div>
     <div class="garden-messages"></div>
     <div class="garden-cursors"></div>
-    <div class="garden-hint"><i class="ph ph-flower-tulip"></i> move in &amp; type to plant a note</div>
+    <div class="garden-hint"><i class="ph ph-flower-tulip"></i> click or type to plant a note</div>
   `
 }
 
@@ -189,12 +189,26 @@ function attachHostListeners() {
   host.addEventListener('pointermove', onPointerMove)
   host.addEventListener('pointerenter', onPointerEnter)
   host.addEventListener('pointerleave', onPointerLeave)
+  host.addEventListener('click', onClick)
 }
 function detachHostListeners() {
   if (!host) return
   host.removeEventListener('pointermove', onPointerMove)
   host.removeEventListener('pointerenter', onPointerEnter)
   host.removeEventListener('pointerleave', onPointerLeave)
+  host.removeEventListener('click', onClick)
+}
+
+// A click on open garden ground also starts a planting (ignore the real header
+// controls, existing flowers, and the open input itself).
+function onClick(e) {
+  if (e.target.closest('button, a, input, textarea, .garden-flower, .garden-typing')) return
+  const r = host.getBoundingClientRect()
+  me.x = clamp((e.clientX - r.left) / r.width, 0, 1)
+  me.y = clamp((e.clientY - r.top) / r.height, 0, 1)
+  pointerInside = true
+  if (!hintDismissed) { hintDismissed = true; root.classList.add('garden-hint-gone') }
+  openTyping(me.x, me.y, '')
 }
 
 function bandSize() {
