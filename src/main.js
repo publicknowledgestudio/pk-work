@@ -20,6 +20,7 @@ import { openModal } from './modal.js'
 import { initContextMenu } from './context-menu.js'
 import { setAccessToken, clearAccessToken, ensureCalendarToken } from './calendar.js'
 import { isDemo, DEMO_USER } from './demo.js'
+import { configureGarden, mountGarden, unmountGarden } from './garden.js'
 import { renderClientBoard } from './client-board.js'
 import { renderClientTimesheets } from './client-timesheets.js'
 import { renderClientTimeline } from './client-timeline.js'
@@ -39,6 +40,20 @@ try {
 const app = initializeApp(firebaseConfig)
 const auth = getAuth(app)
 export const db = getFirestore(app)
+
+// Realtime Database (Cursor Garden) — only if a databaseURL is configured.
+// Initialized lazily to keep firebase/database out of the critical path.
+let rtdb = null
+async function initRtdb() {
+  if (rtdb || !firebaseConfig.databaseURL) return rtdb
+  try {
+    const { getDatabase } = await import('firebase/database')
+    rtdb = getDatabase(app)
+  } catch (err) {
+    console.warn('[garden] Realtime Database init failed:', err)
+  }
+  return rtdb
+}
 
 // State
 let currentUser = null
@@ -592,6 +607,11 @@ if (!isDemo()) onAuthStateChanged(auth, async (user) => {
       })
     }
 
+    // Cursor Garden — team members only (clients never see My Week)
+    if (userRole === 'team') {
+      initRtdb().then((rdb) => configureGarden({ rtdb: rdb, user: currentUser, isDemo: false }))
+    }
+
     // Read initial route from hash (or default)
     handleRouteChange()
   } else {
@@ -645,6 +665,9 @@ async function bootstrapDemo() {
     allTasks = tasks
     renderCurrentView()
   })
+
+  // Cursor Garden — local-only in demo (no RTDB), with a synthetic gardener.
+  configureGarden({ rtdb: null, user: DEMO_USER, isDemo: true })
 
   handleRouteChange()
 }
@@ -1054,6 +1077,7 @@ function renderCurrentView() {
 if (currentView !== 'references') cleanupReferences()
   if (currentView !== 'attendance') cleanupAttendance()
   if (currentView !== 'contracts') cleanupContracts()
+  if (currentView !== 'my-day') unmountGarden()
 
   switch (currentView) {
     case 'board':

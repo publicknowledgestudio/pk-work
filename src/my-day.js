@@ -3,6 +3,7 @@ import { updateTask, createTask, loadDailyFocus, saveDailyFocus, loadHolidays } 
 import { openModal } from './modal.js'
 import { attachMention } from './mention.js'
 import { loadCalendarEvents, ensureCalendarToken, getAccessToken } from './calendar.js'
+import { mountGarden } from './garden.js'
 import { renderTimeGrid, bindTimeGridActions, isTimeGridDragging } from './time-grid.js'
 import { setSelectedTaskIds, clearSelection } from './context-menu.js'
 import { toDate, formatShortDate } from './utils/dates.js'
@@ -478,6 +479,9 @@ function bindMyDayActions(container, tasks, currentUser, ctx, now, isOwnDay, { c
       saveCollapsed()
     })
   })
+
+  // Cursor Garden — re-host the persistent garden layer into this render's header
+  mountGarden(container.querySelector('.my-day-header'))
 
   // Calendar panel show/hide toggle (persisted, collapsed by default)
   const calToggle = container.querySelector('#myday-cal-toggle')

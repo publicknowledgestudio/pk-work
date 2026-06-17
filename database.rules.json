@@ -1,0 +1,22 @@
+{
+  "rules": {
+    "gardens": {
+      "$garden": {
+        "cursors": {
+          ".read": "auth != null && auth.token.email.matches(/@publicknowledge\\.co$/)",
+          "$uid": {
+            ".write": "auth != null && auth.uid == $uid && auth.token.email.matches(/@publicknowledge\\.co$/)",
+            ".validate": "newData.val() == null || (newData.hasChildren(['x','y']) && newData.child('x').isNumber() && newData.child('y').isNumber() && newData.child('name').isString() && newData.child('color').isString())"
+          }
+        },
+        "messages": {
+          ".read": "auth != null && auth.token.email.matches(/@publicknowledge\\.co$/)",
+          "$msg": {
+            ".write": "auth != null && auth.token.email.matches(/@publicknowledge\\.co$/)",
+            ".validate": "newData.val() == null || (newData.hasChildren(['text','x','y','uid']) && newData.child('text').isString() && newData.child('text').val().length <= 240 && newData.child('x').isNumber() && newData.child('y').isNumber())"
+          }
+        }
+      }
+    }
+  }
+}

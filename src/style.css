@@ -1299,12 +1299,238 @@ body {
   font-size: 15px;
 }
 
+/* ───────────────────────── Cursor Garden ───────────────────────── */
 .my-day-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   margin-bottom: 28px;
   gap: 16px;
+}
+
+/* The header becomes a live garden band; real controls sit above the layer. */
+.my-day-header.garden-band {
+  position: relative;
+  overflow: hidden;
+  min-height: 150px;
+  padding: 18px 20px;
+  border-radius: 18px;
+  border: 1px solid var(--color-garden-edge);
+}
+
+.my-day-header.garden-band > *:not(.garden-root) {
+  position: relative;
+  z-index: 2;
+}
+
+.garden-root {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  overflow: hidden;
+}
+
+.garden-sky {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(120% 80% at 80% -10%, rgba(255, 246, 196, 0.7), transparent 60%),
+    linear-gradient(180deg, #eaf7ff 0%, #eef8ec 48%, #dcefd0 100%);
+}
+
+/* Swaying grass + the odd flower along the bottom edge */
+.garden-grass {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 40px;
+}
+.garden-blade {
+  position: absolute;
+  bottom: 0;
+  width: 6px;
+  height: var(--h, 18px);
+  background: linear-gradient(180deg, #7cc36a, #4e9d3f);
+  border-radius: 4px 4px 0 0;
+  transform-origin: bottom center;
+  animation: garden-sway 3.2s var(--d, 0s) ease-in-out infinite alternate;
+}
+.garden-blade.has-flower i {
+  position: absolute;
+  top: -15px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-style: normal;
+  font-size: 14px;
+}
+
+.garden-cursors,
+.garden-messages {
+  position: absolute;
+  inset: 0;
+}
+.garden-messages { z-index: 2; pointer-events: none; }
+.garden-cursors { z-index: 3; pointer-events: none; }
+
+/* Figma-style remote cursor */
+.garden-cursor {
+  position: absolute;
+  top: 0; left: 0;
+  will-change: transform;
+  filter: drop-shadow(0 1px 1px var(--color-garden-shadow));
+}
+.garden-cursor svg { display: block; }
+.garden-cursor-name {
+  position: absolute;
+  left: 15px;
+  top: 17px;
+  padding: 1px 7px;
+  border-radius: 4px 10px 10px 10px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: nowrap;
+  box-shadow: var(--shadow);
+}
+
+/* Planted message → blooming flower */
+.garden-flower {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  transform-origin: bottom center;
+  pointer-events: auto;
+  animation: garden-bloom 0.5s cubic-bezier(0.2, 1.3, 0.4, 1) both;
+  transition: opacity 0.8s ease;
+}
+.garden-flower-bubble {
+  position: relative;
+  max-width: 220px;
+  background: var(--color-white);
+  border: 1.5px solid var(--c, var(--color-garden-leaf));
+  border-radius: 12px;
+  padding: 5px 9px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--color-gray-900);
+  box-shadow: var(--shadow-lg);
+}
+.garden-flower-bubble::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -7px;
+  width: 10px; height: 10px;
+  background: var(--color-white);
+  border-right: 1.5px solid var(--c, var(--color-garden-leaf));
+  border-bottom: 1.5px solid var(--c, var(--color-garden-leaf));
+  transform: translateX(-50%) rotate(45deg);
+}
+.garden-flower-name {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  margin-bottom: 1px;
+}
+.garden-flower-text { display: block; word-break: break-word; }
+.garden-flower-stem {
+  width: 2px;
+  height: 16px;
+  margin: 0 auto;
+  background: linear-gradient(180deg, #5aa84a, #3c7d31);
+}
+.garden-flower-bloom {
+  font-size: 22px;
+  text-align: center;
+  line-height: 1;
+  transition: transform 0.8s ease, opacity 0.8s ease;
+}
+.garden-flower.wilting .garden-flower-bloom { transform: rotate(22deg) translateY(2px); opacity: 0.6; }
+.garden-flower.wilting .garden-flower-bubble { opacity: 0.65; }
+.garden-flower-x {
+  position: absolute;
+  top: -8px; right: -8px;
+  width: 18px; height: 18px;
+  display: flex; align-items: center; justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: var(--color-white);
+  color: var(--color-gray-600);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  pointer-events: auto;
+  box-shadow: var(--shadow);
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s;
+}
+.garden-flower:hover .garden-flower-x { opacity: 1; }
+.garden-flower-x:hover { color: var(--danger); }
+
+/* Inline typing input */
+.garden-typing {
+  position: absolute;
+  transform: translate(-2px, -50%);
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  pointer-events: auto;
+}
+.garden-typing-tag {
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 6px;
+  border-radius: 6px 0 0 6px;
+  white-space: nowrap;
+}
+.garden-typing-input {
+  border: 1.5px solid var(--c, var(--color-garden-leaf));
+  border-left: none;
+  border-radius: 0 8px 8px 0;
+  padding: 4px 8px;
+  font-size: 12px;
+  width: 180px;
+  outline: none;
+  background: var(--color-white);
+  box-shadow: var(--shadow-lg);
+}
+
+.garden-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 10px;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-garden-hint);
+  background: var(--color-garden-hint-bg);
+  padding: 3px 10px;
+  border-radius: 999px;
+  opacity: 0.9;
+  transition: opacity 0.4s ease;
+}
+.garden-root.garden-hint-gone .garden-hint { opacity: 0; }
+
+@keyframes garden-sway {
+  from { transform: rotate(-7deg); }
+  to { transform: rotate(7deg); }
+}
+@keyframes garden-bloom {
+  0% { transform: translate(-50%, -100%) scale(0.2); opacity: 0; }
+  60% { transform: translate(-50%, -100%) scale(1.08); }
+  100% { transform: translate(-50%, -100%) scale(1); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .garden-blade { animation: none; }
+  .garden-flower { animation: none; }
 }
 
 .my-day-greeting-row {

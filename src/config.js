@@ -8,6 +8,11 @@ export const firebaseConfig = {
   storageBucket: 'workdotpk-a06dc.firebasestorage.app',
   messagingSenderId: '764388053600',
   appId: '1:764388053600:web:2e761bac21bacc8d3de905',
+  // Realtime Database URL — powers the live Cursor Garden on My Week. Enable
+  // Realtime Database in the Firebase console (US region) and paste its URL
+  // here, e.g. 'https://workdotpk-a06dc-default-rtdb.firebaseio.com'. Leave
+  // empty and the garden runs local-only (your own cursor + a demo gardener).
+  databaseURL: '',
 }
 
 // OAuth 2.0 Web client ID, used by Google Identity Services to silently refresh
