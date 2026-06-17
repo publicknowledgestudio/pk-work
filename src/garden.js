@@ -303,7 +303,14 @@ function openTyping(x, y, initial) {
 }
 
 function closeTyping() {
-  if (typing) { typing.wrap.remove(); typing = null }
+  if (!typing) return
+  // Null `typing` BEFORE removing the input. Removing the focused input fires a
+  // synchronous blur, whose handler also calls closeTyping(); clearing the ref
+  // first makes that re-entrant call a no-op instead of double-removing the node
+  // (which threw NotFoundError and aborted the Enter handler before planting).
+  const wrap = typing.wrap
+  typing = null
+  try { wrap.remove() } catch (_) {}
 }
 
 function plantMessage(text, x, y) {
