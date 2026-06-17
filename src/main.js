@@ -19,6 +19,7 @@ import { renderTimesheets } from './timesheets.js'
 import { openModal } from './modal.js'
 import { initContextMenu } from './context-menu.js'
 import { setAccessToken, clearAccessToken, ensureCalendarToken } from './calendar.js'
+import { isDemo, DEMO_USER } from './demo.js'
 import { renderClientBoard } from './client-board.js'
 import { renderClientTimesheets } from './client-timesheets.js'
 import { renderClientTimeline } from './client-timeline.js'
@@ -441,7 +442,7 @@ export async function reconnectCalendar() {
   return false
 }
 
-onAuthStateChanged(auth, async (user) => {
+if (!isDemo()) onAuthStateChanged(auth, async (user) => {
   if (user) {
     currentUser = user
     setCurrentUser(user.email)
@@ -611,6 +612,44 @@ onAuthStateChanged(auth, async (user) => {
     cleanupAttendance()
   }
 })
+
+// ── Demo mode bootstrap (DEV only, ?demo=1) — skip Firebase auth and boot
+// straight into the app as a fake team user with in-memory fixture data. ──
+async function bootstrapDemo() {
+  currentUser = DEMO_USER
+  setCurrentUser(DEMO_USER.email)
+  userRole = 'team'
+  userClientId = null
+  userClientName = null
+
+  loginScreen.classList.add('hidden')
+  appShell.classList.remove('hidden')
+
+  const member = TEAM.find((m) => m.email === DEMO_USER.email)
+  userAvatar.textContent = (DEMO_USER.displayName || DEMO_USER.email)[0].toUpperCase()
+  userAvatar.style.background = member?.color || '#6b7280'
+  const userMenuInfo = document.getElementById('user-menu-info')
+  if (userMenuInfo) {
+    userMenuInfo.innerHTML = `
+      <div class="user-menu-name">${esc(DEMO_USER.displayName)}</div>
+      <div class="user-menu-email">${esc(DEMO_USER.email)}</div>
+    `
+  }
+
+  clients = await loadClients(db)
+  projects = await loadProjects(db)
+  people = await loadPeople(db)
+  populateFilters()
+
+  unsubTasks = subscribeToTasks(db, (tasks) => {
+    allTasks = tasks
+    renderCurrentView()
+  })
+
+  handleRouteChange()
+}
+
+if (isDemo()) bootstrapDemo()
 
 // Navigation — clicks update the hash, hashchange handler does the rest
 navTabs.forEach((tab) => {

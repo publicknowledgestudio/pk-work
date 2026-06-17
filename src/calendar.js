@@ -13,6 +13,7 @@
 //   id is configured.
 
 import { googleOAuthClientId } from './config.js'
+import { isDemo, demo } from './demo.js'
 
 const CAL_SCOPE = 'https://www.googleapis.com/auth/calendar.events.readonly'
 const STORAGE_KEY = 'pk_gcal_token'
@@ -140,6 +141,7 @@ export async function ensureCalendarToken({ interactive = false, hint } = {}) {
 
 // Fetch a day's calendar events for the signed-in user.
 export async function loadCalendarEvents(dateStr) {
+  if (isDemo()) return demo.loadCalendarEvents(dateStr)
   if (!getAccessToken()) return { events: [], needsAuth: true }
 
   const dayStart = new Date(dateStr + 'T00:00:00')

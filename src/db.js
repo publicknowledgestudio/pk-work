@@ -14,6 +14,7 @@ import {
   serverTimestamp,
   getDoc,
 } from 'firebase/firestore'
+import { isDemo, demo } from './demo.js'
 
 // Current user email — set once on login by main.js. Lets updateTask
 // stamp updatedBy without threading the email through every call site.
@@ -30,6 +31,7 @@ export async function saveUserProfile(db, email, data) {
 }
 
 export async function loadUserProfiles(db) {
+  if (isDemo()) return demo.loadUserProfiles()
   const snap = await getDocs(collection(db, 'users'))
   const profiles = {}
   snap.docs.forEach((d) => {
@@ -41,6 +43,7 @@ export async function loadUserProfiles(db) {
 // ===== Clients =====
 
 export async function loadClients(db) {
+  if (isDemo()) return demo.loadClients()
   const snap = await getDocs(query(collection(db, 'clients'), orderBy('name')))
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
 }
@@ -136,6 +139,7 @@ export async function deleteProject(db, projectId) {
 // ===== Projects =====
 
 export async function loadProjects(db) {
+  if (isDemo()) return demo.loadProjects()
   const snap = await getDocs(query(collection(db, 'projects'), orderBy('name')))
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
 }
@@ -166,6 +170,7 @@ export function subscribeToPeople(db, callback) {
 }
 
 export async function loadPeople(db) {
+  if (isDemo()) return demo.loadPeople()
   const snap = await getDocs(query(collection(db, 'people'), orderBy('name')))
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
 }
@@ -248,6 +253,7 @@ export function normalizeTask(task) {
 }
 
 export function subscribeToTasks(db, callback) {
+  if (isDemo()) return demo.subscribeToTasks(callback)
   const cutoff = new Date()
   cutoff.setDate(cutoff.getDate() - 14)
   const cutoffTs = Timestamp.fromDate(cutoff)
@@ -305,6 +311,7 @@ export function subscribeToTasksByClient(db, clientId, callback) {
 }
 
 export async function createTask(db, data) {
+  if (isDemo()) return demo.createTask(data)
   const assignees = data.assignees || (data.assignee ? [data.assignee] : [])
   return addDoc(collection(db, 'tasks'), {
     title: data.title,
@@ -324,6 +331,7 @@ export async function createTask(db, data) {
 }
 
 export async function updateTask(db, taskId, data) {
+  if (isDemo()) return demo.updateTask(taskId, data)
   const update = { ...data, updatedAt: serverTimestamp() }
   if (currentUserEmail && update.updatedBy === undefined) {
     update.updatedBy = currentUserEmail
@@ -353,12 +361,14 @@ export async function updateTask(db, taskId, data) {
 }
 
 export async function deleteTask(db, taskId) {
+  if (isDemo()) return demo.deleteTask(taskId)
   return deleteDoc(doc(db, 'tasks', taskId))
 }
 
 // ===== Daily Focus =====
 
 export async function loadDailyFocus(db, userEmail, dateStr) {
+  if (isDemo()) return demo.loadDailyFocus(userEmail, dateStr)
   const docId = `${userEmail}_${dateStr}`
   const snap = await getDoc(doc(db, 'dailyFocus', docId))
   if (snap.exists()) {
@@ -372,6 +382,7 @@ export async function loadDailyFocus(db, userEmail, dateStr) {
 }
 
 export async function saveDailyFocus(db, userEmail, dateStr, taskIds, timeBlocks) {
+  if (isDemo()) return demo.saveDailyFocus(userEmail, dateStr, taskIds, timeBlocks)
   const docId = `${userEmail}_${dateStr}`
   const data = { userEmail, date: dateStr, taskIds: [...new Set(taskIds)], updatedAt: serverTimestamp() }
   if (timeBlocks !== undefined) {
@@ -388,6 +399,7 @@ export async function saveDailyFocus(db, userEmail, dateStr, taskIds, timeBlocks
 // Find all dailyFocus docs for a user that currently contain the given taskId.
 // Used when moving a task between scheduled days — to remove it from its previous day.
 export async function findDailyFocusContainingTask(db, userEmail, taskId) {
+  if (isDemo()) return demo.findDailyFocusContainingTask(userEmail, taskId)
   const q = query(
     collection(db, 'dailyFocus'),
     where('taskIds', 'array-contains', taskId)
@@ -644,6 +656,7 @@ export function subscribeToHolidays(db, callback) {
 }
 
 export async function loadHolidays(db) {
+  if (isDemo()) return demo.loadHolidays()
   const q = query(collection(db, 'holidays'), orderBy('date', 'asc'))
   const snap = await getDocs(q)
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }))

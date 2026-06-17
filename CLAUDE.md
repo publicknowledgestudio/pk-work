@@ -269,6 +269,12 @@ npm run dev                           # Local dev server (port 3000)
 npm run build                         # Build to dist/
 npm run deploy                        # Build + deploy everything
 
+# Demo mode (DEV ONLY) — drive the UI with no Firebase auth / no live data.
+# Visit http://localhost:3000/?demo=1 (e.g. ?demo=1#/my-week). Boots straight
+# in as a fake team user backed by in-memory fixtures (src/demo.js). Gated on
+# import.meta.env.DEV so it is inert in production builds. Lets the preview/agent
+# load, click, and screenshot any view without credentials.
+
 # Firebase
 firebase deploy --only functions      # Deploy functions only
 firebase deploy --only hosting        # Deploy hosting only
