@@ -90,19 +90,12 @@
 
   --color-slate-300: #cbd5e1;
 
-  /* Cursor Garden — intentionally mode-invariant decorative values (the
-     garden reads the same in light & dark), so they live in the palette tier. */
-  --color-garden-leaf:    #4e9d3f;
-  --color-garden-edge:    rgba(120, 180, 120, 0.25);
-  --color-garden-shadow:  rgba(0, 0, 0, 0.25);
-  --color-garden-hint:    #5b7a52;
-  --color-garden-hint-bg: rgba(255, 255, 255, 0.55);
-  /* Header text/controls sit ON the always-bright sky, so their ink stays dark
-     in both themes — the semantic --text would flip light in dark mode and
-     wash out against the sky. */
-  --color-garden-ink:      #1f3326;
-  --color-garden-ink-soft: #50635a;
-  --color-garden-wash:     rgba(28, 51, 38, 0.1);
+  /* Cursor Garden — mode-invariant accents (identical day & night): the leaf
+     green for note-bubble borders and the cursor drop shadow. The themed
+     surfaces (sky, grass, stems, hint) are mode-aware --garden-* tokens in the
+     component tier below. */
+  --color-garden-leaf:   #4e9d3f;
+  --color-garden-shadow: rgba(0, 0, 0, 0.25);
 
   /* ── SEMANTIC (light) ─────────────────────────────────────────────── */
   color-scheme: light;
@@ -174,6 +167,20 @@
   --toast-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
   --toast-ok: var(--color-green-300);
   --toast-failed: var(--color-rose-300);
+
+  /* ── COMPONENT: Cursor Garden (day; night values in the dark block) ── */
+  --garden-sky-top:     #eaf7ff;
+  --garden-sky-mid:     #eef8ec;
+  --garden-sky-bottom:  #dcefd0;
+  --garden-sky-glow:    rgba(255, 246, 196, 0.7);
+  --garden-blade-top:    #7cc36a;
+  --garden-blade-bottom: #4e9d3f;
+  --garden-stem-top:    #5aa84a;
+  --garden-stem-bottom: #3c7d31;
+  --garden-edge:      rgba(120, 180, 120, 0.25);
+  --garden-hint-text: #5b7a52;
+  --garden-hint-bg:   rgba(255, 255, 255, 0.55);
+  --garden-star:      transparent;
 
   /* ── MODE-INVARIANT (geometry, typography, aliases) ───────────────── */
   --radius: 8px;
@@ -256,5 +263,19 @@
     --toast-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
     --toast-ok: var(--color-green-400);
     --toast-failed: var(--color-rose-400);
+
+    /* ── COMPONENT: Cursor Garden (night) ───────────────────────────── */
+    --garden-sky-top:     #1f2c44;
+    --garden-sky-mid:     #1c2730;
+    --garden-sky-bottom:  #16241d;
+    --garden-sky-glow:    rgba(186, 206, 255, 0.15);
+    --garden-blade-top:    #46795a;
+    --garden-blade-bottom: #2b5236;
+    --garden-stem-top:    #3c6645;
+    --garden-stem-bottom: #28492f;
+    --garden-edge:      rgba(150, 178, 220, 0.16);
+    --garden-hint-text: #aecdb9;
+    --garden-hint-bg:   rgba(16, 26, 20, 0.5);
+    --garden-star:      rgba(255, 255, 255, 0.6);
   }
 }

@@ -1315,34 +1315,12 @@ body {
   min-height: 184px;
   padding: 18px 20px;
   border-radius: 18px;
-  border: 1px solid var(--color-garden-edge);
+  border: 1px solid var(--garden-edge);
 }
 
 .my-day-header.garden-band > *:not(.garden-root) {
   position: relative;
   z-index: 2;
-}
-
-/* The sky stays bright in both themes, so the header content layered over it
-   uses dark, mode-invariant garden ink — otherwise dark mode's light --text
-   washes out against the sky. (The Calendar pill keeps its own styling.) */
-.my-day-header.garden-band .my-day-greeting {
-  color: var(--color-garden-ink);
-}
-.my-day-header.garden-band .my-day-date,
-.my-day-header.garden-band .week-nav-btn,
-.my-day-header.garden-band .myday-person-caret {
-  color: var(--color-garden-ink-soft);
-}
-.my-day-header.garden-band .week-nav-btn:hover {
-  color: var(--color-garden-ink);
-  background: var(--color-garden-wash);
-}
-.my-day-header.garden-band .week-nav-label:hover {
-  background: var(--color-garden-wash);
-}
-.my-day-header.garden-band .my-day-greeting-trigger:hover .myday-person-caret {
-  color: var(--color-garden-ink);
 }
 
 .garden-root {
@@ -1358,8 +1336,13 @@ body {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(120% 80% at 80% -10%, rgba(255, 246, 196, 0.7), transparent 60%),
-    linear-gradient(180deg, #eaf7ff 0%, #eef8ec 48%, #dcefd0 100%);
+    radial-gradient(1.5px 1.5px at 14% 32%, var(--garden-star), transparent),
+    radial-gradient(1.5px 1.5px at 29% 17%, var(--garden-star), transparent),
+    radial-gradient(1px 1px at 47% 26%, var(--garden-star), transparent),
+    radial-gradient(1.5px 1.5px at 68% 19%, var(--garden-star), transparent),
+    radial-gradient(1px 1px at 84% 36%, var(--garden-star), transparent),
+    radial-gradient(120% 80% at 80% -10%, var(--garden-sky-glow), transparent 60%),
+    linear-gradient(180deg, var(--garden-sky-top) 0%, var(--garden-sky-mid) 48%, var(--garden-sky-bottom) 100%);
 }
 
 /* Swaying grass + the odd flower along the bottom edge */
@@ -1373,7 +1356,7 @@ body {
   bottom: 0;
   width: 6px;
   height: var(--h, 18px);
-  background: linear-gradient(180deg, #7cc36a, #4e9d3f);
+  background: linear-gradient(180deg, var(--garden-blade-top), var(--garden-blade-bottom));
   border-radius: 4px 4px 0 0;
   transform-origin: bottom center;
   animation: garden-sway 3.2s var(--d, 0s) ease-in-out infinite alternate;
@@ -1462,7 +1445,7 @@ body {
   width: 2px;
   height: 16px;
   margin: 0 auto;
-  background: linear-gradient(180deg, #5aa84a, #3c7d31);
+  background: linear-gradient(180deg, var(--garden-stem-top), var(--garden-stem-bottom));
 }
 .garden-flower-bloom {
   font-size: 22px;
@@ -1532,8 +1515,8 @@ body {
   gap: 5px;
   font-size: 11px;
   font-weight: 500;
-  color: var(--color-garden-hint);
-  background: var(--color-garden-hint-bg);
+  color: var(--garden-hint-text);
+  background: var(--garden-hint-bg);
   padding: 3px 10px;
   border-radius: 999px;
   opacity: 0.9;
