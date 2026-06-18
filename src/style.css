@@ -746,15 +746,15 @@ body {
 }
 
 .avatar-xs {
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   font-size: 10px;
   font-weight: 600;
-  color: white;
+  color: #fff;
   flex-shrink: 0;
 }
 
@@ -799,8 +799,8 @@ body {
 }
 
 .avatar-photo-xs {
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   object-fit: cover;
   flex-shrink: 0;
@@ -1323,6 +1323,28 @@ body {
   z-index: 2;
 }
 
+/* The sky stays bright in both themes, so the header content layered over it
+   uses dark, mode-invariant garden ink — otherwise dark mode's light --text
+   washes out against the sky. (The Calendar pill keeps its own styling.) */
+.my-day-header.garden-band .my-day-greeting {
+  color: var(--color-garden-ink);
+}
+.my-day-header.garden-band .my-day-date,
+.my-day-header.garden-band .week-nav-btn,
+.my-day-header.garden-band .myday-person-caret {
+  color: var(--color-garden-ink-soft);
+}
+.my-day-header.garden-band .week-nav-btn:hover {
+  color: var(--color-garden-ink);
+  background: var(--color-garden-wash);
+}
+.my-day-header.garden-band .week-nav-label:hover {
+  background: var(--color-garden-wash);
+}
+.my-day-header.garden-band .my-day-greeting-trigger:hover .myday-person-caret {
+  color: var(--color-garden-ink);
+}
+
 .garden-root {
   position: absolute;
   inset: 0;
@@ -1369,9 +1391,10 @@ body {
 .garden-messages {
   position: absolute;
   inset: 0;
+  pointer-events: none;
 }
-.garden-messages { z-index: 2; pointer-events: none; }
-.garden-cursors { z-index: 3; pointer-events: none; }
+.garden-messages { z-index: 2; }
+.garden-cursors { z-index: 3; }
 
 /* Figma-style remote cursor */
 .garden-cursor {
@@ -1649,25 +1672,6 @@ body {
   font-size: 11px;
   color: var(--text-tertiary);
   font-weight: 400;
-}
-
-.avatar-photo-xs {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  object-fit: cover;
-}
-
-.avatar-xs {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  font-size: 11px;
-  font-weight: 700;
-  color: #fff;
 }
 
 .my-day-date {
@@ -2065,26 +2069,6 @@ body {
 .my-day-action-btn.add-focus:hover {
   background: var(--status-warning-bg);
   border-color: var(--warning);
-}
-
-/* Tiny avatars */
-.avatar-photo-xs {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  object-fit: cover;
-}
-
-.avatar-xs {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 10px;
-  font-weight: 600;
-  color: #fff;
 }
 
 /* ===== Modal ===== */
