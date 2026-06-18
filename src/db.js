@@ -55,6 +55,7 @@ export async function loadClientById(db, clientId) {
 }
 
 export async function createClient(db, data) {
+  if (isDemo()) return demo.createClient(data)
   return addDoc(collection(db, 'clients'), {
     name: data.name,
     logoUrl: data.logoUrl || '',
@@ -66,14 +67,17 @@ export async function createClient(db, data) {
 }
 
 export async function updateClient(db, clientId, data) {
+  if (isDemo()) return demo.updateClient(clientId, data)
   return updateDoc(doc(db, 'clients', clientId), data)
 }
 
 export async function deleteClient(db, clientId) {
+  if (isDemo()) return demo.deleteClient(clientId)
   return deleteDoc(doc(db, 'clients', clientId))
 }
 
 export async function uploadClientLogo(file) {
+  if (isDemo()) return demo.uploadClientLogo(file)
   const dataUrl = await readFileAsDataUrl(file)
   return resizeImageDataUrl(dataUrl).catch(() => dataUrl)
 }
@@ -115,6 +119,7 @@ function resizeImageDataUrl(dataUrl, maxSize = 192) {
 }
 
 export function subscribeToClients(db, callback) {
+  if (isDemo()) return demo.subscribeToClients(callback)
   const q = query(collection(db, 'clients'), orderBy('name'))
   return onSnapshot(q, (snap) => {
     callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
@@ -122,6 +127,7 @@ export function subscribeToClients(db, callback) {
 }
 
 export function subscribeToProjects(db, callback) {
+  if (isDemo()) return demo.subscribeToProjects(callback)
   const q = query(collection(db, 'projects'), orderBy('name'))
   return onSnapshot(q, (snap) => {
     callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
@@ -129,10 +135,12 @@ export function subscribeToProjects(db, callback) {
 }
 
 export async function updateProject(db, projectId, data) {
+  if (isDemo()) return demo.updateProject(projectId, data)
   return updateDoc(doc(db, 'projects', projectId), data)
 }
 
 export async function deleteProject(db, projectId) {
+  if (isDemo()) return demo.deleteProject(projectId)
   return deleteDoc(doc(db, 'projects', projectId))
 }
 
@@ -150,6 +158,7 @@ export async function loadProjectsByClient(db, clientId) {
 }
 
 export async function createProject(db, data) {
+  if (isDemo()) return demo.createProject(data)
   return addDoc(collection(db, 'projects'), {
     name: data.name,
     clientId: data.clientId || '',
@@ -214,6 +223,7 @@ export async function updatePersonContent(db, personId, content, updatedBy) {
 }
 
 export async function updateProjectContent(db, projectId, content, updatedBy) {
+  if (isDemo()) return demo.updateProjectContent(projectId, content, updatedBy)
   return updateDoc(doc(db, 'projects', projectId), {
     content,
     contentUpdatedAt: serverTimestamp(),
@@ -540,6 +550,7 @@ export async function loadClientUsers(db) {
 }
 
 export async function createClientUser(db, email, data) {
+  if (isDemo()) return demo.createClientUser(email, data)
   return setDoc(doc(db, 'clientUsers', email.toLowerCase()), {
     email: email.toLowerCase(),
     name: data.name || '',
@@ -550,10 +561,12 @@ export async function createClientUser(db, email, data) {
 }
 
 export async function deleteClientUser(db, email) {
+  if (isDemo()) return demo.deleteClientUser(email)
   return deleteDoc(doc(db, 'clientUsers', email))
 }
 
 export function subscribeToClientUsers(db, callback) {
+  if (isDemo()) return demo.subscribeToClientUsers(callback)
   const q = query(collection(db, 'clientUsers'), orderBy('createdAt', 'desc'))
   return onSnapshot(q, (snap) => {
     callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
