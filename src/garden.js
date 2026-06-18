@@ -476,26 +476,33 @@ function seedGhosts() {
   const c = { name: other.name, color: other.color, x: 0.3, y: 0.5, tx: 0.3, ty: 0.5, el: null, phase: 0 }
   remote.set(uid, c)
   ensureCursorEl(uid, c)
-  ghosts.push({ uid, c, seed: 0.7 })
-  nextGhostPlant = Date.now() + 4000
+  ghosts.push({ uid, c, seed: 0.7, lastMsgId: null })
+  nextGhostPlant = Date.now() + 6000
 }
 
 function updateGhosts(w, h) {
   const t = performance.now()
+  // A slow, lazy drift — enough to show the cursor is "alive" without the
+  // constant darting that cluttered the demo preview.
   for (const g of ghosts) {
-    g.c.tx = clamp(0.5 + 0.34 * Math.sin(t * 0.00033 + g.seed * 6), 0.05, 0.95)
-    g.c.ty = clamp(0.5 + 0.26 * Math.cos(t * 0.00051 + g.seed * 6), 0.1, 0.9)
+    g.c.tx = clamp(0.5 + 0.28 * Math.sin(t * 0.00013 + g.seed * 6), 0.05, 0.95)
+    g.c.ty = clamp(0.5 + 0.2 * Math.cos(t * 0.00019 + g.seed * 6), 0.12, 0.88)
   }
   if (Date.now() > nextGhostPlant && ghosts[0]) {
     const g = ghosts[0]
+    // Keep only one ghost note on screen — without this the 25h note lifetime
+    // means demo notes accumulate forever and bury the preview.
+    if (g.lastMsgId && messages.has(g.lastMsgId)) deleteMessage(g.lastMsgId)
     const lines = ['watered the roadmap 🌱', 'nice work today!', 'coffee? ☕', 'shipping season 🌻', 'look at this bloom']
     const text = lines[Math.floor(t / 1000) % lines.length]
-    addLocalMessage('ghost_' + Math.floor(t), {
+    const id = 'ghost_' + Math.floor(t)
+    addLocalMessage(id, {
       uid: g.uid, name: g.c.name, color: g.c.color, text,
       x: clamp(g.c.x, 0.08, 0.92), y: clamp(g.c.y, PLANT_Y_MIN, PLANT_Y_MAX),
       plant: PLANTS[Math.floor(t / 700) % PLANTS.length], plantedAt: Date.now(),
     })
-    nextGhostPlant = Date.now() + 14000
+    g.lastMsgId = id
+    nextGhostPlant = Date.now() + 30000
   }
 }
 
