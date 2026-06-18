@@ -3,6 +3,7 @@ import { createTask, updateTask } from './db.js'
 import { openModal } from './modal.js'
 import { attachMention } from './mention.js'
 import { toDate, formatDeadline } from './utils/dates.js'
+import { visibleClients, visibleProjects } from './utils/client-visibility.js'
 
 function sortUrgentFirst(tasks) {
   return [...tasks].sort((a, b) => (a.priority === 'urgent' ? 0 : 1) - (b.priority === 'urgent' ? 0 : 1))
@@ -223,9 +224,11 @@ export function renderBoardByAssignee(container, tasks, ctx) {
 }
 
 export function renderBoardByClient(container, tasks, ctx) {
-  // Build columns: one per client + "No Client"
+  // Build columns: one per *active* client (not archived, has open items) + "No Client".
+  // Dormant/archived clients drop off here; their work still shows on the
+  // by-status/by-assignee boards. See utils/client-visibility.js.
   const columns = [
-    ...ctx.clients.map((c) => ({
+    ...visibleClients(ctx.clients, ctx.allTasks || tasks).map((c) => ({
       id: c.id,
       name: c.name,
       logoUrl: c.logoUrl || null,
@@ -332,17 +335,11 @@ export function renderBoardByClient(container, tasks, ctx) {
 }
 
 export function renderBoardByProject(container, tasks, ctx) {
-  // Build columns: only projects with >1 task, plus "No Project"
+  // Build columns: only projects with open items (and whose client isn't
+  // archived), plus "No Project". See utils/client-visibility.js.
   const noProjectTasks = tasks.filter((t) => !t.projectId)
-  const columns = ctx.projects
-    .map((p) => ({
-      id: p.id,
-      name: p.name,
-      clientId: p.clientId || '',
-      tasks: tasks.filter((t) => t.projectId === p.id),
-    }))
-    .filter((col) => col.tasks.length > 0)
-    .map((col) => ({ id: col.id, name: col.name, clientId: col.clientId }))
+  const columns = visibleProjects(ctx.projects, ctx.clients, ctx.allTasks || tasks)
+    .map((p) => ({ id: p.id, name: p.name, clientId: p.clientId || '' }))
 
   if (noProjectTasks.length > 0) {
     columns.push({ id: '', name: 'No Project', clientId: '' })

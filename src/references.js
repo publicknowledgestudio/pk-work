@@ -7,6 +7,7 @@ import {
   updateMoodboard,
   deleteMoodboard,
 } from './db.js'
+import { selectableClients } from './utils/client-visibility.js'
 
 // Module-level state
 let unsubReferences = null
@@ -90,7 +91,7 @@ function renderToolbar() {
   })
   allTags.sort()
 
-  const clientOptions = (currentCtx?.clients || [])
+  const clientOptions = selectableClients(currentCtx?.clients)
     .map((c) => `<option value="${c.id}"${filterClientId === c.id ? ' selected' : ''}>${esc(c.name)}</option>`)
     .join('')
 

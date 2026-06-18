@@ -4,6 +4,7 @@ import { openModal } from './modal.js'
 import { attachMention } from './mention.js'
 import { setSelectedTaskIds, clearSelection } from './context-menu.js'
 import { toDate, formatDeadline } from './utils/dates.js'
+import { archivedClientIds } from './utils/client-visibility.js'
 
 // null = unset (default to logged-in user on first render); 'all' = everyone; else email
 let viewingEmail = null
@@ -21,8 +22,10 @@ export function renderBacklog(container, tasks, currentUser, ctx) {
   const myEmail = currentUser?.email
   if (viewingEmail === null) viewingEmail = myEmail
 
-  // Filter to backlog
-  let items = tasks.filter((t) => t.status === 'backlog')
+  // Filter to backlog, dropping tasks belonging to archived clients (their
+  // tabs and items leave every working view). Tasks with no client stay.
+  const archived = archivedClientIds(ctx.clients)
+  let items = tasks.filter((t) => t.status === 'backlog' && !archived.has(t.clientId))
 
   // Person scope
   if (viewingEmail !== 'all') {

@@ -3012,6 +3012,46 @@ body {
   text-overflow: ellipsis;
 }
 
+/* Archived / dormant clients — dimmed in the sidebar but still listed. */
+.manage-client-row.dimmed {
+  opacity: 0.5;
+}
+.manage-client-row.dimmed:hover {
+  opacity: 0.75;
+}
+.manage-client-row.active.dimmed {
+  opacity: 1;
+}
+.manage-state-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+.manage-state-badge.archived {
+  background: var(--text-tertiary);
+  color: #fff;
+}
+.manage-state-badge.inactive {
+  background: var(--bg);
+  color: var(--text-tertiary);
+  border: 1px solid var(--border);
+}
+.manage-chip.manage-chip-archived {
+  background: var(--text-tertiary);
+  color: #fff;
+}
+.manage-chip.manage-chip-inactive {
+  background: transparent;
+  color: var(--text-tertiary);
+  border: 1px solid var(--border);
+}
+
 .manage-slack-indicator {
   color: var(--text-tertiary);
   font-size: 14px;

@@ -15,6 +15,7 @@ import {
 } from './db.js'
 import { renderMarkdown } from './markdown.js'
 import { TEAM } from './config.js'
+import { openItemIndex, clientState } from './utils/client-visibility.js'
 
 let unsubClients = null
 let unsubProjects = null
@@ -115,9 +116,18 @@ function renderSidebar() {
   const list = document.getElementById('manage-client-list')
   if (!list) return
 
-  const filtered = clientSearchTerm
+  const { clientIds: openClientIds } = openItemIndex(currentCtx?.allTasks)
+  // Active first, then dormant ("Inactive"), then archived — preserving the
+  // name order within each group (localClients arrives ordered by name).
+  const rank = (c) => {
+    const s = clientState(c, openClientIds)
+    return s === 'active' ? 0 : s === 'inactive' ? 1 : 2
+  }
+
+  const matched = clientSearchTerm
     ? localClients.filter((c) => c.name.toLowerCase().includes(clientSearchTerm))
     : localClients
+  const filtered = [...matched].sort((a, b) => rank(a) - rank(b))
 
   if (filtered.length === 0) {
     list.innerHTML = `
@@ -136,11 +146,17 @@ function renderSidebar() {
       ? `<img class="manage-client-logo" src="${c.logoUrl}" alt="${escHtml(c.name)}">`
       : `<span class="manage-client-logo manage-client-logo-placeholder">${escHtml(c.name[0] || '?')}</span>`
     const isActive = c.id === selectedClientId && !activeProjectId
+    const state = clientState(c, openClientIds)
+    const badge = state === 'archived'
+      ? '<span class="manage-state-badge archived">Archived</span>'
+      : state === 'inactive'
+        ? '<span class="manage-state-badge inactive">Inactive</span>'
+        : ''
     return `
-      <button class="manage-client-row${isActive ? ' active' : ''}" data-id="${c.id}">
+      <button class="manage-client-row${isActive ? ' active' : ''}${state !== 'active' ? ' dimmed' : ''}" data-id="${c.id}">
         ${logo}
         <div class="manage-client-row-info">
-          <span class="manage-client-row-name">${escHtml(c.name)}</span>
+          <span class="manage-client-row-name">${escHtml(c.name)}${badge}</span>
           <span class="manage-client-row-meta">
             ${projectCount} project${projectCount !== 1 ? 's' : ''}
             ${userCount > 0 ? ` · ${userCount} user${userCount !== 1 ? 's' : ''}` : ''}
@@ -217,17 +233,27 @@ function renderClientDetail(pane, client) {
     ? `<code>${escHtml(client.slackChannelId)}</code>`
     : '<span class="muted">Not set</span>'
 
+  const { clientIds: openClientIds } = openItemIndex(currentCtx?.allTasks)
+  const state = clientState(client, openClientIds)
+  const stateChip = state === 'archived'
+    ? '<span class="manage-chip manage-chip-archived"><i class="ph ph-archive"></i> Archived</span>'
+    : state === 'inactive'
+      ? '<span class="manage-chip manage-chip-inactive"><i class="ph ph-moon"></i> Inactive · no open items</span>'
+      : ''
+
   pane.innerHTML = `
     <div class="manage-detail-header">
       ${logo}
       <div class="manage-detail-identity">
         <h2 class="manage-detail-name">${escHtml(client.name)}</h2>
         <div class="manage-detail-chips">
+          ${stateChip}
           <span class="manage-chip"><i class="ph ph-currency-circle-dollar"></i> ${rateLabel}</span>
           <span class="manage-chip"><i class="ph ph-hash"></i> ${slackLabel}</span>
         </div>
       </div>
       <div class="manage-detail-actions">
+        <button class="btn-ghost" id="archive-client-btn"><i class="ph ${client.archived ? 'ph-arrow-counter-clockwise' : 'ph-archive'}"></i> ${client.archived ? 'Unarchive' : 'Archive'}</button>
         <button class="btn-ghost" id="edit-client-btn"><i class="ph ph-pencil-simple"></i> Edit</button>
         <button class="btn-ghost danger" id="delete-client-btn"><i class="ph ph-trash"></i></button>
       </div>
@@ -253,6 +279,13 @@ function renderClientDetail(pane, client) {
       <div class="manage-rows" id="client-users-list"></div>
     </div>
   `
+
+  // Archive / unarchive client. Archived clients drop off every working view
+  // (board, backlog, pickers, references filter) but keep their data and stay
+  // visible here, dimmed. Toggling re-renders via the clients subscription.
+  document.getElementById('archive-client-btn').addEventListener('click', async () => {
+    await updateClient(currentCtx.db, client.id, { archived: !client.archived })
+  })
 
   // Edit client
   document.getElementById('edit-client-btn').addEventListener('click', () => {

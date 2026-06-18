@@ -1,6 +1,7 @@
 import { TEAM, PRIORITIES, STATUSES } from './config.js'
 import { createTask, updateTask, deleteTask, createProject } from './db.js'
 import { toISODate } from './utils/dates.js'
+import { selectableClients } from './utils/client-visibility.js'
 
 const overlay = document.getElementById('task-modal')
 const closeBtn = document.getElementById('modal-close')
@@ -212,7 +213,9 @@ function updatePickerDisplay() {
 
 function renderProjectList(query) {
   const q = query.toLowerCase()
-  const clients = currentCtx.clients || []
+  // Archived clients drop out of the picker; dormant ones stay so new work can
+  // revive them.
+  const clients = selectableClients(currentCtx.clients)
   const projects = currentCtx.projects || []
 
   // Group projects by client

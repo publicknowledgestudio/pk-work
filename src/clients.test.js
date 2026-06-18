@@ -341,6 +341,71 @@ describe('clients.js (master-detail layout)', () => {
     })
   })
 
+  describe('Archive & dormant states', () => {
+    it('shows an Archive action and archives the client on click', async () => {
+      vi.mocked(db.updateClient).mockResolvedValue()
+      renderClients(container, mockCtx)
+      clientsCallback([{ id: 'c1', name: 'Acme' }])
+      projectsCallback([])
+      usersCallback([])
+
+      const btn = container.querySelector('#archive-client-btn')
+      expect(btn).toBeTruthy()
+      expect(btn.textContent).toContain('Archive')
+      btn.click()
+      await new Promise((r) => setTimeout(r, 20))
+      expect(db.updateClient).toHaveBeenCalledWith(mockCtx.db, 'c1', { archived: true })
+    })
+
+    it('shows Unarchive and an Archived badge/chip for an archived client', () => {
+      renderClients(container, mockCtx)
+      clientsCallback([{ id: 'c1', name: 'Acme', archived: true }])
+      projectsCallback([])
+      usersCallback([])
+
+      expect(container.querySelector('#archive-client-btn').textContent).toContain('Unarchive')
+      expect(container.querySelector('.manage-chip-archived')).toBeTruthy()
+      expect(container.querySelector('.manage-state-badge.archived')).toBeTruthy()
+    })
+
+    it('marks a client with no open items as Inactive', () => {
+      renderClients(container, mockCtx) // mockCtx.allTasks = []
+      clientsCallback([{ id: 'c1', name: 'Acme' }])
+      projectsCallback([])
+      usersCallback([])
+
+      expect(container.querySelector('.manage-state-badge.inactive')).toBeTruthy()
+      expect(container.querySelector('.manage-chip-inactive')).toBeTruthy()
+    })
+
+    it('shows no state badge for a client that has an open item', () => {
+      const ctx = { ...mockCtx, allTasks: [{ id: 't1', clientId: 'c1', status: 'todo' }] }
+      renderClients(container, ctx)
+      clientsCallback([{ id: 'c1', name: 'Acme' }])
+      projectsCallback([])
+      usersCallback([])
+
+      expect(container.querySelector('.manage-state-badge')).toBeFalsy()
+      expect(container.querySelector('.manage-chip-archived')).toBeFalsy()
+      expect(container.querySelector('.manage-chip-inactive')).toBeFalsy()
+    })
+
+    it('orders active clients above archived/inactive ones in the sidebar', () => {
+      const ctx = { ...mockCtx, allTasks: [{ id: 't1', clientId: 'c_active', status: 'todo' }] }
+      renderClients(container, ctx)
+      clientsCallback([
+        { id: 'c_archived', name: 'Archived Co', archived: true },
+        { id: 'c_active', name: 'Active Co' },
+      ])
+      projectsCallback([])
+      usersCallback([])
+
+      const rows = container.querySelectorAll('.manage-client-row')
+      expect(rows[0].dataset.id).toBe('c_active')
+      expect(rows[1].dataset.id).toBe('c_archived')
+    })
+  })
+
   describe('cleanupClients', () => {
     it('unsubscribes from all listeners', () => {
       const unsubClients = vi.fn()
