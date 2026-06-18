@@ -1,6 +1,6 @@
 import { STATUSES, PRIORITIES, TEAM } from './config.js'
 import { createTask, updateTask, deleteTask, loadDailyFocus, saveDailyFocus, findDailyFocusContainingTask } from './db.js'
-import { toISODate } from './utils/dates.js'
+import { toISODate, toLocalISODate } from './utils/dates.js'
 
 let menuEl = null
 let activeTaskIds = [] // supports single or multi-select
@@ -73,7 +73,10 @@ function showMenu(x, y, ctx) {
 
   openSubmenu = null
 
-  const todayStr = new Date().toISOString().split('T')[0]
+  // Local calendar day, NOT toISOString() — these day keys feed saveDailyFocus
+  // and must match My Week's keys regardless of time-of-day (toISOString rolls
+  // the date back for timezones east of UTC in the early morning).
+  const todayStr = toLocalISODate(new Date())
 
   // Build 2-week mini calendar (current week Mon-Sun + next week Mon-Sun)
   const now = new Date()
@@ -85,7 +88,7 @@ function showMenu(x, y, ctx) {
   for (let i = 0; i < 14; i++) {
     const d = new Date(monday)
     d.setDate(monday.getDate() + i)
-    const ds = d.toISOString().split('T')[0]
+    const ds = toLocalISODate(d)
     calDays.push({ date: d, dateStr: ds, day: d.getDate(), isToday: ds === todayStr, isPast: ds < todayStr, isWeekend: d.getDay() === 0 || d.getDay() === 6 })
   }
   const week1 = calDays.slice(0, 7)

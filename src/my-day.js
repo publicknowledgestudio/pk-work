@@ -6,7 +6,7 @@ import { loadCalendarEvents, ensureCalendarToken, getAccessToken } from './calen
 import { mountGarden } from './garden.js'
 import { renderTimeGrid, bindTimeGridActions, isTimeGridDragging } from './time-grid.js'
 import { setSelectedTaskIds, clearSelection } from './context-menu.js'
-import { toDate, formatShortDate } from './utils/dates.js'
+import { toDate, formatShortDate, toLocalISODate } from './utils/dates.js'
 
 let focusTaskIds = []
 let timeBlocks = []
@@ -58,7 +58,10 @@ export async function renderMyDay(container, tasks, currentUser, ctx) {
   const targetEmail = viewingEmail
 
   const now = new Date()
-  todayStr = now.toISOString().split('T')[0]
+  // Local calendar day, NOT toISOString() — UTC rolls the date back for any
+  // timezone east of UTC during the early-morning window, which would file
+  // done tasks (and dailyFocus) under the wrong day. See utils/dates.js.
+  todayStr = toLocalISODate(now)
 
   // Compute current week (Mon-Sun)
   const dayOfWeek = now.getDay() // 0=Sun, 1=Mon...
@@ -71,7 +74,7 @@ export async function renderMyDay(container, tasks, currentUser, ctx) {
   for (let i = 0; i < 7; i++) {
     const d = new Date(monday)
     d.setDate(monday.getDate() + i)
-    const dateStr = d.toISOString().split('T')[0]
+    const dateStr = toLocalISODate(d)
     weekDates.push({
       dateStr,
       label: dayNames[i],
@@ -112,7 +115,7 @@ export async function renderMyDay(container, tasks, currentUser, ctx) {
   for (let i = 0; i < 7; i++) {
     const d = new Date(nextMonday)
     d.setDate(nextMonday.getDate() + i)
-    nextWeekDates.push(d.toISOString().split('T')[0])
+    nextWeekDates.push(toLocalISODate(d))
   }
 
   // Load daily focus for all weekdays + next week in parallel
@@ -178,7 +181,7 @@ export async function renderMyDay(container, tasks, currentUser, ctx) {
     if (weekTaskIdSet.has(t.id)) continue
     const closedDate = toDate(t.closedAt)
     if (!closedDate) continue
-    const closedDateStr = closedDate.toISOString().split('T')[0]
+    const closedDateStr = toLocalISODate(closedDate)
     if (!currentWeekDateSet.has(closedDateStr)) continue
     weekDayTasks[closedDateStr].push(t)
   }
@@ -195,7 +198,7 @@ export async function renderMyDay(container, tasks, currentUser, ctx) {
 
   // Determine the calendar date (default: today)
   const calDate = calendarDate || now
-  const calDateStr = calDate.toISOString().split('T')[0]
+  const calDateStr = toLocalISODate(calDate)
   const isCalToday = calDateStr === todayStr
 
   // Load focus data for the calendar date (if different from today)
