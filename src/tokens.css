@@ -24,41 +24,39 @@
   /* ── PALETTE ──────────────────────────────────────────────────────── */
   --color-white: #ffffff;
 
-  /* Day-mode neutrals (pure achromatic ramp — stark/minimal) */
-  --color-gray-50:  #fafafa;
-  --color-gray-100: #f4f4f4;
-  --color-gray-150: #ececec;
-  --color-gray-200: #e6e6e6;
-  --color-gray-250: #dcdcdc;
-  --color-gray-400: #a0a0a0;
-  --color-gray-500: #6b6b6b;
-  --color-gray-600: #4a4a4a;
-  --color-gray-900: #0a0a0a;
+  /* Day-mode neutrals (Apple-style ramp) */
+  --color-gray-50:  #f9fafb;
+  --color-gray-100: #f5f5f7;
+  --color-gray-150: #f0f0f2;
+  --color-gray-200: #e8e8ed;
+  --color-gray-250: #e5e5ea;
+  --color-gray-400: #aeaeb2;
+  --color-gray-500: #86868b;
+  --color-gray-600: #6b7280;
+  --color-gray-900: #1d1d1f;
 
-  /* Night-mode neutrals (true-black, achromatic — stark/minimal) */
-  --color-zinc-100: #ffffff;
-  --color-zinc-300: #d6d6d6;
-  --color-zinc-400: #8c8c8c;
-  --color-zinc-500: #5c5c5c;
-  --color-night-50:  #1c1c1c;
-  --color-night-100: #222222;
-  --color-night-200: #1c1c1c;
-  --color-night-300: #181818;
-  --color-night-400: #0a0a0a;
-  --color-night-500: #121212;
-  --color-night-600: #0c0c0c;
-  --color-night-700: #000000;
-  --color-night-border: #2a2a2a;
-  --color-night-input:  #333333;
+  /* Night-mode neutrals */
+  --color-zinc-100: #f4f4f5;
+  --color-zinc-300: #d4d4d8;
+  --color-zinc-400: #a1a1aa;
+  --color-zinc-500: #71717a;
+  --color-night-50:  #2a2d36;
+  --color-night-100: #252832;
+  --color-night-200: #20232b;
+  --color-night-300: #1f222a;
+  --color-night-400: #1a1c22;
+  --color-night-500: #17191f;
+  --color-night-600: #12141a;
+  --color-night-700: #101114;
+  --color-night-border: #30333d;
+  --color-night-input:  #373b46;
 
-  /* Brand → monochrome ink (stark/minimal): black accent by day, graphite by
-     night. --primary doubles as a button background (white text) AND accent
-     text on the page, so the night value is a balanced mid-tone, not white. */
-  --color-indigo-50:  #ededed;
-  --color-indigo-500: #111111;
-  --color-indigo-600: #000000;
-  --color-lavender-300: #828282;
-  --color-lavender-400: #6e6e6e;
+  /* Brand: indigo (day) / lavender (night) */
+  --color-indigo-50:  #eef2ff;
+  --color-indigo-500: #4f46e5;
+  --color-indigo-600: #4338ca;
+  --color-lavender-300: #a29bff;
+  --color-lavender-400: #8b83ff;
 
   /* Status hues */
   --color-red-50:    #fef2f2;
@@ -119,7 +117,7 @@
   --primary: var(--color-indigo-500);
   --primary-hover: var(--color-indigo-600);
   --primary-light: var(--color-indigo-50);
-  --primary-soft: rgba(0, 0, 0, 0.06);
+  --primary-soft: rgba(79, 70, 229, 0.1);
 
   --danger: var(--color-red-500);
   --danger-hover: var(--color-red-600);
@@ -153,9 +151,9 @@
   --status-warning-bg: var(--color-amber-50);
   --status-warning-text: var(--color-amber-700);
 
-  --shadow-sm: 0 1px 1px rgba(0, 0, 0, 0.04);
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
-  --shadow-lg: 0 2px 10px rgba(0, 0, 0, 0.07);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.1);
 
   /* ── COMPONENT (light) ────────────────────────────────────────────── */
   --toast-bg: var(--color-gray-900);
@@ -214,8 +212,8 @@
 
     --primary: var(--color-lavender-400);
     --primary-hover: var(--color-lavender-300);
-    --primary-light: rgba(255, 255, 255, 0.08);
-    --primary-soft: rgba(255, 255, 255, 0.1);
+    --primary-light: rgba(139, 131, 255, 0.16);
+    --primary-soft: rgba(139, 131, 255, 0.16);
 
     --danger: var(--color-rose-400);
     --danger-hover: var(--color-rose-500);
