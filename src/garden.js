@@ -17,9 +17,9 @@
 import { TEAM } from './config.js'
 
 const GARDEN_ID = 'my-week'
-const LIFETIME = 60_000 // a message lives for one minute
-const WILT_LEAD = 9_000 // start wilting in the last ~9s
-const PRUNE_GRACE = 15_000 // any client deletes RTDB nodes older than LIFETIME + this
+const LIFETIME = 25 * 60 * 60 * 1000 // a planted message lives for 25 hours
+const WILT_LEAD = 5 * 60 * 1000 // start wilting in the last 5 minutes
+const PRUNE_GRACE = 60_000 // any client deletes RTDB nodes older than LIFETIME + this
 const WRITE_MS = 45 // cursor write throttle (~22/sec)
 const MAX_LEN = 240
 const PLANT_Y_MIN = 0.52 // keep planted flowers in the lower garden zone…
@@ -51,6 +51,8 @@ let messagesRef = null
 let myCursorRef = null
 let unsubCursors = null
 let unsubMessages = null
+let unsubOffset = null
+let serverOffset = 0 // (serverTime - clientTime) from RTDB; keeps message aging clock-skew-proof
 
 // Demo "ghost gardener" state
 const ghosts = []
@@ -87,6 +89,7 @@ export function unmountGarden() {
   removeMyCursor()
   if (unsubCursors) { unsubCursors(); unsubCursors = null }
   if (unsubMessages) { unsubMessages(); unsubMessages = null }
+  if (unsubOffset) { unsubOffset(); unsubOffset = null }
   closeTyping()
   // Clear transient remote state (messages already in RTDB will reload on return)
   remote.forEach((c) => c.el?.remove())
@@ -171,6 +174,9 @@ async function connectRtdb() {
 
     unsubCursors = rdb.onValue(cursorsRef, (snap) => reconcileCursors(snap.val() || {}))
     unsubMessages = rdb.onValue(messagesRef, (snap) => reconcileMessages(snap.val() || {}))
+    // Track the server-time offset so a message's 25h lifetime is judged against
+    // real server time, not the local wall clock (which may be skewed).
+    unsubOffset = rdb.onValue(rdb.ref(cfg.rtdb, '.info/serverTimeOffset'), (snap) => { serverOffset = snap.val() || 0 })
   } catch (err) {
     console.warn('[garden] RTDB unavailable, running local-only:', err)
     rdb = null
@@ -376,11 +382,10 @@ function reconcileMessages(data) {
 
 function addLocalMessage(id, d) {
   if (messages.has(id)) return
-  // Lifetime is measured from when THIS client first renders the message, using
-  // our own clock — never the server's plantedAt against our clock. That cross-
-  // clock comparison made messages vanish on any client whose clock led the
-  // server (a skewed wall clock = the message looked "born expired").
-  const m = { ...d, el: null, shownAt: Date.now() }
+  // plantedAt is server time for RTDB notes (and local Date.now() for demo/ghost,
+  // where serverOffset is 0); the loop ages it against server time so a skewed
+  // client clock can't make a note look "born expired" or linger forever.
+  const m = { ...d, el: null }
   messages.set(id, m)
   ensureFlowerEl(id, m)
 }
@@ -437,10 +442,13 @@ function loop() {
     if (c.el) c.el.style.transform = `translate(${(c.x * w).toFixed(1)}px, ${(c.y * h).toFixed(1)}px)`
   }
 
-  // Position flowers + handle wilting / expiry
-  const now = Date.now()
+  // Position flowers + handle wilting / expiry. Age against server time so the
+  // 25h lifetime is absolute (every client expires a note at the same wall
+  // clock, and any client reliably prunes stale notes — no endless build-up).
+  const now = Date.now() + serverOffset
   for (const [id, m] of messages) {
-    const age = now - (m.shownAt || now)
+    const planted = typeof m.plantedAt === 'number' ? m.plantedAt : now
+    const age = now - planted
     if (age > LIFETIME + PRUNE_GRACE) { deleteMessage(id); continue }
     if (age > LIFETIME) { if (m.el) m.el.style.opacity = '0'; if (id.startsWith('ghost_') || id.startsWith('local_')) { m.el?.remove(); messages.delete(id) } continue }
     if (m.el) {
