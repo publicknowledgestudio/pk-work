@@ -1,6 +1,6 @@
 import { STATUSES, PRIORITIES, TEAM } from './config.js'
 import { createTask, updateTask, deleteTask, loadDailyFocus, saveDailyFocus, findDailyFocusContainingTask } from './db.js'
-import { toISODate, toLocalISODate } from './utils/dates.js'
+import { toDate, toLocalISODate } from './utils/dates.js'
 
 let menuEl = null
 let activeTaskIds = [] // supports single or multi-select
@@ -381,9 +381,11 @@ function closeMenu() {
   openSubmenu = null
 }
 
-// null when absent — createTask distinguishes null from '' for deadlines
+// null when absent — createTask distinguishes null from '' for deadlines.
+// Local calendar day (not toISOString) so the duplicated deadline keeps its
+// day in the early-morning IST window, consistent with the scheduler keys above.
 function formatDateForCreate(deadline) {
-  return toISODate(deadline) || null
+  return toLocalISODate(toDate(deadline)) || null
 }
 
 function esc(str) {

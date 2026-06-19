@@ -11,6 +11,7 @@ import {
   contractsForUser,
   earliestContractStart,
 } from './utils/contracts.js'
+import { toLocalISODate } from './utils/dates.js'
 
 let unsubContracts = null
 let unsubLeaves = null
@@ -133,7 +134,7 @@ function renderContractRow(c, admin) {
   const start = c.startDate || '?'
   const end = c.endDate || 'ongoing'
   const isOngoing = !c.endDate
-  const today = new Date().toISOString().split('T')[0]
+  const today = toLocalISODate(new Date()) // local day — endDate keys are local
   const ended = c.endDate && c.endDate < today
   const statusBadge = isOngoing
     ? `<span class="contract-status contract-status-active">Active</span>`

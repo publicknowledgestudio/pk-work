@@ -1,6 +1,7 @@
 import { TEAM, isAdmin, getAttendanceTeam } from './config.js'
 import { createLeave, updateLeave } from './db.js'
 import { accrualMonthsFromContracts, contractsForUser } from './utils/contracts.js'
+import { toLocalISODate } from './utils/dates.js'
 
 const overlay = document.getElementById('leave-modal')
 const closeBtn = document.getElementById('leave-modal-close')
@@ -139,7 +140,7 @@ export function openLeaveModal(ctx, options = {}) {
 
   const tomorrow = new Date()
   tomorrow.setDate(tomorrow.getDate() + 1)
-  const defaultDate = tomorrow.toISOString().split('T')[0]
+  const defaultDate = toLocalISODate(tomorrow) // local day — leave dates are local YYYY-MM-DD
 
   startInput.value = leave?.startDate || options.date || defaultDate
   endInput.value = leave?.endDate || leave?.startDate || options.date || defaultDate

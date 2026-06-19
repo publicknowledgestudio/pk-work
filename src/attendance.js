@@ -2,6 +2,7 @@ import { TEAM, ATTENDANCE_STATUSES, isAdmin, getAttendanceTeam } from './config.
 import { subscribeToLeaves, createLeave, cancelLeave, subscribeToHolidays, createHoliday, deleteHoliday, subscribeToContracts } from './db.js'
 import { openLeaveModal } from './leave-modal.js'
 import { accrualMonthsFromContracts, contractsForUser, earliestContractStart } from './utils/contracts.js'
+import { toLocalISODate } from './utils/dates.js'
 
 let unsubLeaves = null
 let unsubHolidays = null
@@ -350,7 +351,7 @@ function renderMonthGrid(team, leaves) {
         }
       }
 
-      const today = new Date().toISOString().split('T')[0]
+      const today = toLocalISODate(new Date()) // local day — dateStr keys are local
       const beforeJoin = memberStart && dateStr < memberStart
       const showDot = !beforeJoin && (dateStr <= today || leave)
 

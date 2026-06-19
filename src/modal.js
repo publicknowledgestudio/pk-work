@@ -1,6 +1,6 @@
 import { TEAM, PRIORITIES, STATUSES } from './config.js'
 import { createTask, updateTask, deleteTask, createProject } from './db.js'
-import { toISODate } from './utils/dates.js'
+import { toDate, toLocalISODate } from './utils/dates.js'
 import { selectableClients } from './utils/client-visibility.js'
 
 const overlay = document.getElementById('task-modal')
@@ -139,9 +139,11 @@ function updateClosedAtVisibility(status) {
   const input = document.getElementById('task-closed-at')
   if (status === 'done') {
     row.classList.remove('hidden')
-    // Auto-fill with today if empty (user just marked as done)
+    // Auto-fill with today if empty (user just marked as done).
+    // Local day, not toISOString() — the date input represents the user's
+    // calendar day (UTC rolls back one day in the early-morning IST window).
     if (!input.value) {
-      input.value = new Date().toISOString().split('T')[0]
+      input.value = toLocalISODate(new Date())
     }
   } else {
     row.classList.add('hidden')
@@ -387,7 +389,10 @@ function close() {
   selectedClientId = ''
 }
 
-const formatDateInput = toISODate
+// Populate <input type="date"> from a stored timestamp using the LOCAL calendar
+// day. closedAt is a real instant, so a UTC date string (toISODate) rolls back
+// one day in the early-morning IST window; toLocalISODate preserves the local day.
+const formatDateInput = (ts) => toLocalISODate(toDate(ts))
 
 function formatNoteDate(ts) {
   if (!ts) return ''

@@ -29,8 +29,10 @@ export function formatShortDate(d) {
   return d.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })
 }
 
-// YYYY-MM-DD string for <input type="date"> values and API payloads.
-// Accepts anything toDate accepts. Returns '' for null/undefined.
+// YYYY-MM-DD string from the UTC calendar day. Accepts anything toDate accepts.
+// Returns '' for null/undefined. NOTE: for <input type="date"> values and any
+// local-calendar-day key, use toLocalISODate(toDate(ts)) instead — toISODate
+// rolls back a day for timezones east of UTC in the early-morning window.
 export function toISODate(ts) {
   const d = toDate(ts)
   if (!d || isNaN(d.getTime())) return ''

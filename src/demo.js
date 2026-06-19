@@ -12,6 +12,8 @@
 // straight into the app as a fake team user.
 // ───────────────────────────────────────────────────────────────────────────
 
+import { toLocalISODate } from './utils/dates.js'
+
 export function isDemo() {
   try {
     return import.meta.env.DEV && new URLSearchParams(location.search).get('demo') === '1'
@@ -23,7 +25,9 @@ export function isDemo() {
 // ── Date helpers (relative to "today" so the week view always has content) ──
 const NOW = new Date()
 const iso = (d) => d.toISOString()
-const dayStr = (d) => d.toISOString().split('T')[0]
+// Local calendar day (not toISOString) — these feed dailyFocus keys + all-day
+// event dates, which must match My Week's toLocalISODate keys in the IST window.
+const dayStr = (d) => toLocalISODate(d)
 function addDays(base, n) {
   const d = new Date(base)
   d.setDate(d.getDate() + n)
