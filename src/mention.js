@@ -9,8 +9,17 @@ import { TEAM } from './config.js'
  *  - getTags() → { assignees: string[], projectId: string, projectName: string }
  *  - destroy()  → cleanup listeners
  */
-export function attachMention(input, { projects = [], clients = [] } = {}) {
-  const tags = { assignees: [], projectId: '', projectName: '' }
+export function attachMention(input, { projects = [], clients = [], initialTags = null } = {}) {
+  // initialTags lets a caller restore a previous compose session's tags after
+  // the input element was re-created (e.g. My Week re-rendering on a remote
+  // task change). The initial renderChips() below paints the restored chips.
+  const tags = initialTags
+    ? {
+        assignees: [...(initialTags.assignees || [])],
+        projectId: initialTags.projectId || '',
+        projectName: initialTags.projectName || '',
+      }
+    : { assignees: [], projectId: '', projectName: '' }
   let dropdown = null
   let activeIdx = 0
   let mentionStart = -1

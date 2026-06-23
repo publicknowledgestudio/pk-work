@@ -84,4 +84,47 @@ describe('renderMyDay', () => {
     expect(upnext.getAttribute('draggable')).toBe('true')
     expect(upnext.querySelector('[data-action="focus"]')).toBeTruthy()
   })
+
+  it('preserves the in-progress add-task input across a re-render (remote task update)', async () => {
+    // First render — user lands on My Week.
+    await renderMyDay(container, [], currentUser, ctx)
+
+    // User starts composing a task in the floating add bar but hasn't hit Enter.
+    const input = container.querySelector('#myday-add-input')
+    expect(input).toBeTruthy()
+    input.value = 'Draft the Q3 deck'
+    input.focus()
+    input.setSelectionRange(6, 6) // caret after "Draft "
+
+    // A teammate adds/updates a task → Firestore snapshot fires → main.js
+    // re-renders My Week with the new task list. This is the reported scenario.
+    await renderMyDay(
+      container,
+      [{ id: 'x1', title: 'A teammate task', assignees: ['bob@example.com'], status: 'todo' }],
+      currentUser,
+      ctx,
+    )
+
+    // The rebuilt input must still hold what the user was typing — not be wiped —
+    // and keep its focus + caret so typing continues uninterrupted.
+    const input2 = container.querySelector('#myday-add-input')
+    expect(input2).toBeTruthy()
+    expect(input2.value).toBe('Draft the Q3 deck')
+    expect(document.activeElement).toBe(input2)
+    expect(input2.selectionStart).toBe(6)
+  })
+
+  it('does not capture/restore the add input when it is empty and unfocused', async () => {
+    await renderMyDay(container, [], currentUser, ctx)
+    // No typing, input not focused — a re-render should just leave it empty.
+    await renderMyDay(
+      container,
+      [{ id: 'x2', title: 'Another task', assignees: ['bob@example.com'], status: 'todo' }],
+      currentUser,
+      ctx,
+    )
+    const input = container.querySelector('#myday-add-input')
+    expect(input.value).toBe('')
+    expect(document.activeElement).not.toBe(input)
+  })
 })

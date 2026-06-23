@@ -22,6 +22,12 @@ let weekOffset = 0 // 0 = current week, -1 = prev, +1 = next
 // (e.g. the marquee mousedown on `container`) don't accumulate.
 let renderAC = null
 
+// The live @-mention controller for the floating add-task input. Held at module
+// scope so a re-render can read its tags (chips) off the OLD input before the
+// rebuild and seed them onto the new one. See the compose-state preservation
+// around container.innerHTML below.
+let addMention = null
+
 export function resetWeekOffset() { weekOffset = 0 }
 
 // Collapsed accordion sections on the My Week view, persisted across renders/sessions.
@@ -273,6 +279,24 @@ export async function renderMyDay(container, tasks, currentUser, ctx) {
   // Build scheduled set for badges
   const scheduledSet = new Set(timeBlocks.map((b) => b.taskId))
 
+  // ── Preserve the in-progress "Add task" compose state across this rebuild ──
+  // A remote task change (a teammate adding/updating a task) fires the Firestore
+  // snapshot listener in main.js, which re-renders this whole view via the
+  // innerHTML assignment below — wiping whatever the user is mid-typing. Capture
+  // the text, caret, focus, and @-mention chips here and restore them after the
+  // rebuild so a teammate's edit never clears your half-typed task.
+  const prevAddInput = container.querySelector('#myday-add-input')
+  let addState = null
+  if (prevAddInput && (prevAddInput.value || document.activeElement === prevAddInput)) {
+    addState = {
+      value: prevAddInput.value,
+      selStart: prevAddInput.selectionStart,
+      selEnd: prevAddInput.selectionEnd,
+      focused: document.activeElement === prevAddInput,
+      tags: addMention?.getTags?.() || null,
+    }
+  }
+
   container.innerHTML = `
     <div class="my-day${calendarOpen ? '' : ' calendar-collapsed'}">
       <div class="my-day-left">
@@ -394,7 +418,7 @@ export async function renderMyDay(container, tasks, currentUser, ctx) {
     </div>
   `
 
-  bindMyDayActions(container, tasks, currentUser, ctx, now, isOwnDay, { calDateStr, isCalToday, calFocusTaskIds, calTimeBlocks, renderSignal })
+  bindMyDayActions(container, tasks, currentUser, ctx, now, isOwnDay, { calDateStr, isCalToday, calFocusTaskIds, calTimeBlocks, renderSignal, addState })
 }
 
 // ── Card renderers ──
@@ -467,7 +491,7 @@ function weekdayCard(task, ctx, now, isOwnDay, dateStr, isPast) {
 
 // ── Actions ──
 
-function bindMyDayActions(container, tasks, currentUser, ctx, now, isOwnDay, { calDateStr, isCalToday, calFocusTaskIds, calTimeBlocks, renderSignal } = {}) {
+function bindMyDayActions(container, tasks, currentUser, ctx, now, isOwnDay, { calDateStr, isCalToday, calFocusTaskIds, calTimeBlocks, renderSignal, addState } = {}) {
   const myEmail = currentUser?.email
   const targetEmail = viewingEmail || myEmail
 
@@ -701,7 +725,20 @@ function bindMyDayActions(container, tasks, currentUser, ctx, now, isOwnDay, { c
   // Floating add-task input with @ mention
   const addInput = container.querySelector('#myday-add-input')
   if (addInput) {
-    const mention = attachMention(addInput, { projects: ctx.projects, clients: ctx.clients })
+    const mention = attachMention(addInput, { projects: ctx.projects, clients: ctx.clients, initialTags: addState?.tags })
+    addMention = mention
+
+    // Restore any in-progress compose state captured before this rebuild, so a
+    // teammate's task change doesn't wipe what the user was typing.
+    if (addState) {
+      addInput.value = addState.value || ''
+      if (addState.focused) {
+        addInput.focus()
+        const pos = addState.value ? addState.value.length : 0
+        try { addInput.setSelectionRange(addState.selStart ?? pos, addState.selEnd ?? pos) } catch {}
+      }
+    }
+
     addInput.addEventListener('keydown', async (e) => {
       if (e.key === 'Enter' && !mention.isOpen()) {
         const title = addInput.value.trim()
