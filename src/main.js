@@ -578,10 +578,12 @@ if (!isDemo()) onAuthStateChanged(auth, async (user) => {
         if (TEAM_ONLY_VIEWS.includes(tab.dataset.view)) tab.style.display = 'none'
       })
 
-      // Hide mobile bottom nav for client users
-      if (mobileBottomNav) mobileBottomNav.style.display = 'none'
+      // Mobile bottom nav: hide the team buttons; the .client-nav loop below shows the client ones
+      mobileBottomNav?.querySelectorAll('.mobile-nav-btn:not(.client-nav)').forEach((btn) => {
+        btn.style.display = 'none'
+      })
 
-      // Show client nav tabs
+      // Show client nav tabs (desktop header tabs + mobile bottom-nav buttons)
       document.querySelectorAll('.client-nav').forEach((tab) => {
         tab.style.display = ''
         tab.classList.remove('hidden')
