@@ -4218,7 +4218,7 @@ body {
   /* Main content: no margin-top for nav strip, add bottom padding for bottom nav */
   #main-content {
     margin-top: 0;
-    height: calc(100vh - 48px - 60px);
+    height: calc(100dvh - 48px - 60px - env(safe-area-inset-bottom, 0px));
     padding-bottom: 60px;
   }
 
@@ -4242,10 +4242,15 @@ body {
     margin-left: 0;
   }
 
-  /* --- Floating Add bar sits above the 60px bottom nav --- */
+  /* --- Floating Add bar sits above the bottom nav (+ home-indicator inset) --- */
   .myday-add-bar {
-    bottom: 60px;
+    bottom: calc(60px + env(safe-area-inset-bottom, 0px));
     padding-bottom: 12px;
+  }
+
+  /* --- Status toast clears the bottom nav on mobile --- */
+  .status-toast {
+    bottom: calc(84px + env(safe-area-inset-bottom, 0px));
   }
 
   /* --- My Day: stack vertically --- */
@@ -4513,7 +4518,7 @@ body {
   bottom: 0;
   left: 0;
   right: 0;
-  height: 60px;
+  height: calc(60px + env(safe-area-inset-bottom, 0px));
   background: var(--surface);
   border-top: 1px solid var(--border);
   z-index: 100;
