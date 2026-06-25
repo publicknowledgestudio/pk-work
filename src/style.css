@@ -4242,9 +4242,10 @@ body {
     margin-left: 0;
   }
 
-  /* --- Mobile Bottom Nav --- */
-  .mobile-bottom-nav {
-    display: flex;
+  /* --- Floating Add bar sits above the 60px bottom nav --- */
+  .myday-add-bar {
+    bottom: 60px;
+    padding-bottom: 12px;
   }
 
   /* --- My Day: stack vertically --- */
@@ -4504,10 +4505,10 @@ body {
   }
 }
 
-/* ===== Mobile Bottom Nav (hidden on desktop) ===== */
+/* ===== Mobile Bottom Nav (shown ≤640px; hidden on desktop just below) ===== */
 
 .mobile-bottom-nav {
-  display: none;
+  display: flex;
   position: fixed;
   bottom: 0;
   left: 0;
@@ -4519,6 +4520,11 @@ body {
   justify-content: space-around;
   align-items: center;
   padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Top nav handles navigation on desktop — hide the bottom bar there */
+@media (min-width: 641px) {
+  .mobile-bottom-nav { display: none; }
 }
 
 .mobile-nav-btn {
