@@ -758,7 +758,7 @@ mobileMoreClose?.addEventListener('click', () => mobileMoreSheet?.classList.add(
 
 // Sync mobile nav active state on route change
 function syncMobileNav() {
-  const bottomViews = ['my-day', 'board', 'attendance']
+  const bottomViews = ['my-day', 'backlog', 'board', 'attendance']
   mobileBottomNav?.querySelectorAll('.mobile-nav-btn').forEach((btn) => {
     if (btn.dataset.view === 'more') {
       // "More" is active when current view isn't one of the bottom bar views
