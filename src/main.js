@@ -144,6 +144,11 @@ function handleRouteChange() {
   if (typeof syncNavMore === 'function') syncNavMore()
   if (typeof syncMobileNav === 'function') syncMobileNav()
 
+  // Entrance stagger plays only on view switches, not on data re-renders
+  document.body.classList.add('view-entering')
+  clearTimeout(handleRouteChange._enterTimer)
+  handleRouteChange._enterTimer = setTimeout(() => document.body.classList.remove('view-entering'), 700)
+
   if (currentUser) renderCurrentView()
 }
 

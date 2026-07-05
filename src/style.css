@@ -1101,34 +1101,36 @@ body {
   box-shadow: var(--shadow-lg);
 }
 
-/* Entrance stagger — cards rise in as a column renders */
-.column-tasks > .task-card {
+/* Entrance stagger — cards rise in when a view first renders.
+   body.view-entering is set on route changes only (main.js), so data
+   re-renders don't replay the animation. */
+.view-entering .column-tasks > .task-card {
   animation: card-in var(--dur-base) var(--ease-out) backwards;
 }
 
-.column-tasks > .task-card:nth-child(2) { animation-delay: 25ms; }
-.column-tasks > .task-card:nth-child(3) { animation-delay: 50ms; }
-.column-tasks > .task-card:nth-child(4) { animation-delay: 75ms; }
-.column-tasks > .task-card:nth-child(5) { animation-delay: 100ms; }
-.column-tasks > .task-card:nth-child(6) { animation-delay: 125ms; }
-.column-tasks > .task-card:nth-child(n + 7) { animation-delay: 150ms; }
+.view-entering .column-tasks > .task-card:nth-child(2) { animation-delay: 25ms; }
+.view-entering .column-tasks > .task-card:nth-child(3) { animation-delay: 50ms; }
+.view-entering .column-tasks > .task-card:nth-child(4) { animation-delay: 75ms; }
+.view-entering .column-tasks > .task-card:nth-child(5) { animation-delay: 100ms; }
+.view-entering .column-tasks > .task-card:nth-child(6) { animation-delay: 125ms; }
+.view-entering .column-tasks > .task-card:nth-child(n + 7) { animation-delay: 150ms; }
 
 @keyframes card-in {
   from { opacity: 0; transform: translateY(5px); }
 }
 
-.my-day-upnext-list > .my-day-card,
-.my-day-weekday-list > .my-day-card,
-.my-day-focus-list > .my-day-card {
+.view-entering .my-day-upnext-list > .my-day-card,
+.view-entering .my-day-weekday-list > .my-day-card,
+.view-entering .my-day-focus-list > .my-day-card {
   animation: card-in var(--dur-base) var(--ease-out) backwards;
 }
 
-.my-day-upnext-list > .my-day-card:nth-child(2),
-.my-day-weekday-list > .my-day-card:nth-child(2) { animation-delay: 25ms; }
-.my-day-upnext-list > .my-day-card:nth-child(3),
-.my-day-weekday-list > .my-day-card:nth-child(3) { animation-delay: 50ms; }
-.my-day-upnext-list > .my-day-card:nth-child(n + 4),
-.my-day-weekday-list > .my-day-card:nth-child(n + 4) { animation-delay: 75ms; }
+.view-entering .my-day-upnext-list > .my-day-card:nth-child(2),
+.view-entering .my-day-weekday-list > .my-day-card:nth-child(2) { animation-delay: 25ms; }
+.view-entering .my-day-upnext-list > .my-day-card:nth-child(3),
+.view-entering .my-day-weekday-list > .my-day-card:nth-child(3) { animation-delay: 50ms; }
+.view-entering .my-day-upnext-list > .my-day-card:nth-child(n + 4),
+.view-entering .my-day-weekday-list > .my-day-card:nth-child(n + 4) { animation-delay: 75ms; }
 
 /* Done state — grayed out, but looks normal on hover */
 .task-card.done {
@@ -1614,10 +1616,10 @@ body {
   .modal,
   .modal-overlay.closing,
   .modal-overlay.closing .modal,
-  .column-tasks > .task-card,
-  .my-day-upnext-list > .my-day-card,
-  .my-day-weekday-list > .my-day-card,
-  .my-day-focus-list > .my-day-card,
+  .view-entering .column-tasks > .task-card,
+  .view-entering .my-day-upnext-list > .my-day-card,
+  .view-entering .my-day-weekday-list > .my-day-card,
+  .view-entering .my-day-focus-list > .my-day-card,
   .ctx-submenu.open,
   .mobile-nav-btn.active i,
   .status-btn.status-pop .status-icon {
