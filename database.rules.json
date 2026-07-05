@@ -15,6 +15,13 @@
             ".write": "auth != null && auth.uid == $uid && auth.token.email.matches(/@publicknowledge\\.co$/)",
             ".validate": "newData.val() == null || (newData.hasChildren(['x','y']) && newData.child('x').isNumber() && newData.child('y').isNumber() && newData.child('name').isString() && newData.child('color').isString())"
           }
+        },
+        "flags": {
+          ".read": "auth != null && auth.token.email.matches(/@publicknowledge\\.co$/)",
+          "$taskId": {
+            ".write": "auth != null && auth.token.email.matches(/@publicknowledge\\.co$/)",
+            ".validate": "newData.val() == null || (newData.hasChildren(['name','email','d']) && newData.child('name').isString() && newData.child('email').isString() && newData.child('d').isString())"
+          }
         }
       }
     },

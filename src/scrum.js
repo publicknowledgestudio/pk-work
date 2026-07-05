@@ -2,16 +2,18 @@
 // Scrum Room — a live, multiplayer standup view.
 //
 // The Garden header shows a "Join Scrum" pill with the avatars of whoever is
-// currently in the room. Joining navigates to #/scrum: a board grouped by
-// person, with everyone's cursors visible (Figma-style, like the garden) and
-// a card UI built for one thing — updating statuses fast during standup.
-// Marking a task done can be backdated ("Done On…") via the same two-week
-// mini-calendar the right-click menu uses, since standup usually catches
-// work finished yesterday or the day before.
+// currently in the room. Joining navigates to #/scrum: everyone's tasks in
+// backlog-style rows grouped by person, with live cursors (Figma-style, like
+// the garden) and a row UI built for standup speed:
+//   · quick status buttons; "Done ▾" opens a past-facing two-week calendar
+//     to backdate closedAt (work finished yesterday is the common case)
+//   · a 💬 flag marks a task "needs discussion" — flags are shared live and
+//     collect into a panel at the top, grouped by client, so after silent
+//     triage the meeting walks exactly that list and nothing else
 //
-// Transport: Firebase Realtime Database (presence + cursors, auto-cleared on
-// disconnect), same as the cursor garden. Task changes ride the existing
-// Firestore subscription, so every participant's board updates live for free.
+// Transport: Firebase Realtime Database (presence + cursors + flags, cleared
+// on disconnect / next day), same as the cursor garden. Task changes ride the
+// existing Firestore subscription, so every participant's view updates live.
 // Demo mode (?demo=1) runs local-only with ghost participants.
 // ───────────────────────────────────────────────────────────────────────────
 
@@ -36,6 +38,10 @@ const participants = new Map()
 let unsubParticipants = null
 const widgetHosts = new Set() // header widgets to re-render on presence change
 
+// Discussion flags (taskId -> { name, email, d }) — shared across the room
+const flags = new Map()
+let unsubFlags = null
+
 // Cursors (uid -> { name, color, x, y, tx, ty, el })
 const cursors = new Map()
 let unsubCursors = null
@@ -48,13 +54,16 @@ let ghostSeed = 0
 // Session tally: tasks marked done while in this scrum
 let doneThisScrum = new Set()
 
+// Latest render args so live flag changes can re-render the open view
+let lastRender = null
+
 // ── Public API ──
 
 export function configureScrum({ rtdb, user, isDemo }) {
   cfg.rtdb = rtdb || null
   cfg.user = resolveIdentity(user)
   cfg.isDemo = !!isDemo
-  if (cfg.rtdb) connectPresence()
+  if (cfg.rtdb) connectRoom()
   else if (cfg.isDemo) seedGhostParticipants()
 }
 
@@ -91,6 +100,7 @@ export function leaveScrum({ navigate = true } = {}) {
     renderAllWidgets()
   }
   stopCursorLoop()
+  lastRender = null
   if (navigate) location.hash = '#/my-week'
 }
 
@@ -98,7 +108,7 @@ export function leaveScrum({ navigate = true } = {}) {
 // (closing the tab is handled by onDisconnect).
 export function scrumViewHidden() {
   if (joined) leaveScrum({ navigate: false })
-  else stopCursorLoop()
+  else { stopCursorLoop(); lastRender = null }
 }
 
 // ── Garden header widget ──
@@ -132,9 +142,9 @@ function paintWidget(el) {
   el.querySelector('#scrum-join-btn').addEventListener('click', () => joinScrum())
 }
 
-// ── Presence plumbing ──
+// ── Presence + flags plumbing ──
 
-async function connectPresence() {
+async function connectRoom() {
   try {
     rdb = await import('firebase/database')
     const pRef = rdb.ref(cfg.rtdb, `scrum/${ROOM_ID}/participants`)
@@ -147,10 +157,44 @@ async function connectPresence() {
       updateRoomHeader()
       reconcileCursorsVisibility()
     })
+
+    const fRef = rdb.ref(cfg.rtdb, `scrum/${ROOM_ID}/flags`)
+    if (unsubFlags) unsubFlags()
+    unsubFlags = rdb.onValue(fRef, (snap) => {
+      const data = snap.val() || {}
+      const today = toLocalISODate(new Date())
+      flags.clear()
+      for (const taskId in data) {
+        const f = data[taskId]
+        if (f.d === today) flags.set(taskId, f)
+        else rdb.remove(rdb.ref(cfg.rtdb, `scrum/${ROOM_ID}/flags/${taskId}`)).catch(() => {}) // prune yesterday's flags
+      }
+      rerenderIfOpen()
+    })
   } catch (err) {
     console.warn('[scrum] RTDB unavailable, presence disabled:', err)
     rdb = null
     if (cfg.isDemo) seedGhostParticipants()
+  }
+}
+
+function toggleFlag(task) {
+  const today = toLocalISODate(new Date())
+  const has = flags.has(task.id)
+  if (rdb && cfg.rtdb) {
+    const ref = rdb.ref(cfg.rtdb, `scrum/${ROOM_ID}/flags/${task.id}`)
+    if (has) rdb.remove(ref).catch(() => {})
+    else rdb.set(ref, { name: cfg.user.name, email: cfg.user.email, d: today }).catch(() => {})
+  } else {
+    if (has) flags.delete(task.id)
+    else flags.set(task.id, { name: cfg.user.name, email: cfg.user.email, d: today })
+    rerenderIfOpen()
+  }
+}
+
+function rerenderIfOpen() {
+  if (lastRender && lastRender.container.isConnected) {
+    renderScrum(lastRender.container, lastRender.tasks, lastRender.ctx)
   }
 }
 
@@ -165,15 +209,23 @@ function seedGhostParticipants() {
 
 // ── The scrum room view ──
 
+const RULES_COLLAPSE_KEY = 'pk-scrum-rules-collapsed'
+
 export function renderScrum(container, tasks, ctx) {
   if (!cfg.user) return
   if (!joined) { joined = true; joinedAt = joinedAt || Date.now() } // deep-link into #/scrum counts as joining
+  lastRender = { container, tasks, ctx }
+
   const todayStr = toLocalISODate(new Date())
   const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1)
   const yesterdayStr = toLocalISODate(yesterday)
-
-  const columns = TEAM.filter((m) => !m.hidden)
   const now = Date.now()
+  const rulesCollapsed = localStorage.getItem(RULES_COLLAPSE_KEY) === '1'
+
+  const members = TEAM.filter((m) => !m.hidden)
+  const flagged = [...flags.entries()]
+    .map(([taskId, f]) => ({ task: tasks.find((t) => t.id === taskId), f }))
+    .filter((x) => x.task)
 
   container.innerHTML = `
     <div class="scrum-room">
@@ -188,9 +240,25 @@ export function renderScrum(container, tasks, ctx) {
           <button class="scrum-leave-btn" id="scrum-leave"><i class="ph ph-sign-out"></i> Leave</button>
         </div>
       </div>
-      <div class="scrum-board-wrap" id="scrum-board-wrap">
-        <div class="board scrum-board" id="scrum-board">
-          ${columns.map((m) => scrumColumn(m, tasks, ctx, { todayStr, yesterdayStr, now })).join('')}
+
+      <div class="scrum-scroll" id="scrum-board">
+        <div class="scrum-content">
+
+          <div class="scrum-rules${rulesCollapsed ? ' collapsed' : ''}" id="scrum-rules">
+            <button class="scrum-rules-header" id="scrum-rules-toggle">
+              <span class="scrum-rules-title"><i class="ph-fill ph-list-checks"></i> Scrum Rules</span>
+              <i class="ph ph-caret-${rulesCollapsed ? 'down' : 'up'}"></i>
+            </button>
+            <ol class="scrum-rules-list">
+              <li><b>Triage silently first (3 min).</b> Walk your own list below: finished things → <b>Done ▾</b> (backdate to the real day) · needs the group → flag <i class="ph-fill ph-chat-circle-dots scrum-rules-flag-icon"></i> · everything else, leave alone.</li>
+              <li><b>Discuss only flagged items,</b> grouped by client — blockers first, then decisions, then FYIs. Resolve → unflag.</li>
+              <li><b>Don't read the board aloud.</b> It's on everyone's screen. Talking is for what the board can't say.</li>
+            </ol>
+          </div>
+
+          ${flagged.length ? discussionPanel(flagged, ctx) : ''}
+
+          ${members.map((m) => personSection(m, tasks, ctx, { todayStr, yesterdayStr, now })).join('')}
         </div>
       </div>
     </div>
@@ -201,88 +269,167 @@ export function renderScrum(container, tasks, ctx) {
 
   container.querySelector('#scrum-leave').addEventListener('click', () => leaveScrum())
 
-  // Open the profile / awards screen from a column header
-  container.querySelectorAll('.scrum-col-header').forEach((h) => {
-    h.addEventListener('click', () => { location.hash = '#/profile/' + encodeURIComponent(h.dataset.email) })
+  container.querySelector('#scrum-rules-toggle').addEventListener('click', () => {
+    const collapsed = container.querySelector('#scrum-rules').classList.toggle('collapsed')
+    localStorage.setItem(RULES_COLLAPSE_KEY, collapsed ? '1' : '0')
+    container.querySelector('#scrum-rules-toggle i:last-child').className = `ph ph-caret-${collapsed ? 'down' : 'up'}`
   })
 
-  bindCardActions(container, tasks, ctx, todayStr)
-  mountCursors(container.querySelector('#scrum-board'), container.querySelector('#scrum-board-wrap'))
+  // Open the profile / awards screen from a person header
+  container.querySelectorAll('.scrum-person-header').forEach((h) => {
+    h.addEventListener('click', (e) => {
+      if (e.target.closest('button')) return
+      location.hash = '#/profile/' + encodeURIComponent(h.dataset.email)
+    })
+  })
+
+  // Discussion panel: jump to a row / unflag
+  container.querySelectorAll('[data-jump]').forEach((el) => {
+    el.addEventListener('click', (e) => {
+      if (e.target.closest('[data-unflag]')) return
+      const row = container.querySelector(`.scrum-row[data-id="${el.dataset.jump}"]`)
+      if (row) {
+        row.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        row.classList.add('scrum-row-pulse')
+        setTimeout(() => row.classList.remove('scrum-row-pulse'), 1600)
+      }
+    })
+  })
+  container.querySelectorAll('[data-unflag]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation()
+      const task = tasks.find((t) => t.id === btn.dataset.unflag)
+      if (task) toggleFlag(task)
+    })
+  })
+
+  bindRowActions(container, tasks, ctx, todayStr)
+  mountCursors(container.querySelector('#scrum-board'))
 }
 
-function scrumColumn(member, tasks, ctx, { todayStr, yesterdayStr, now }) {
+// "Needs Discussion" — flagged tasks grouped by client, the meeting's agenda
+function discussionPanel(flagged, ctx) {
+  const groups = new Map() // clientName -> items
+  for (const item of flagged) {
+    const client = ctx.clients.find((c) => c.id === item.task.clientId)
+    const key = client?.name || 'No client'
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key).push(item)
+  }
+  const sorted = [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0]))
+
+  return `
+    <div class="scrum-discuss">
+      <div class="scrum-discuss-header">
+        <i class="ph-fill ph-chat-circle-dots"></i> Needs Discussion
+        <span class="scrum-discuss-count">${flagged.length}</span>
+      </div>
+      ${sorted.map(([clientName, items]) => `
+        <div class="scrum-discuss-group">
+          <div class="scrum-discuss-client">${esc(clientName)}</div>
+          ${items.map(({ task, f }) => {
+            const owner = TEAM.find((m) => (task.assignees || []).includes(m.email))
+            return `
+            <div class="scrum-discuss-item" data-jump="${task.id}" title="Jump to task">
+              <span class="scrum-discuss-title">${esc(task.title)}</span>
+              <span class="scrum-discuss-by">${owner ? esc(owner.name) : ''} · flagged by ${esc(f.name)}</span>
+              <button class="scrum-discuss-resolve" data-unflag="${task.id}" title="Resolved — remove from discussion"><i class="ph ph-check"></i></button>
+            </div>
+          `}).join('')}
+        </div>
+      `).join('')}
+    </div>
+  `
+}
+
+function personSection(member, tasks, ctx, { todayStr, yesterdayStr, now }) {
   const mine = tasks.filter((t) => (t.assignees || []).includes(member.email))
   const active = mine.filter((t) => ['in_progress', 'review', 'todo'].includes(t.status))
   const order = { in_progress: 0, review: 1, todo: 2 }
-  active.sort((a, b) => (order[a.status] - order[b.status]) || (a.priority === 'urgent' ? -1 : 0))
+  active.sort((a, b) => (order[a.status] - order[b.status]) || (a.priority === 'urgent' ? -1 : 1))
   const recentDone = mine.filter((t) => {
     if (t.status !== 'done' || !t.closedAt) return false
     const d = toLocalISODate(toDate(t.closedAt))
     return d === todayStr || d === yesterdayStr
   })
   const doneToday = recentDone.filter((t) => toLocalISODate(toDate(t.closedAt)) === todayStr).length
+  if (active.length === 0 && recentDone.length === 0) return ''
+
+  const inScrum = [...participants.values()].some((p) => p.email === member.email)
 
   return `
-    <div class="column scrum-column" data-email="${member.email}">
-      <div class="column-header scrum-col-header" data-email="${member.email}" title="View ${esc(member.name)}'s stats">
-        ${avatarHtml(member, 'scrum-col-avatar')}
-        <span class="column-label">${esc(member.name)}</span>
+    <div class="scrum-person" data-email="${member.email}">
+      <div class="scrum-person-header" data-email="${member.email}" title="View ${esc(member.name)}'s stats">
+        ${avatarHtml(member, 'scrum-person-avatar')}
+        <span class="scrum-person-name">${esc(member.name)}</span>
+        ${inScrum ? '<span class="scrum-person-here" title="In the room">●</span>' : ''}
         ${doneToday > 0 ? `<span class="scrum-col-blooms" title="Completed today">🌼 ${doneToday}</span>` : ''}
-        <span class="column-count">${active.length}</span>
+        <span class="scrum-person-count">${active.length}</span>
       </div>
-      <div class="column-tasks">
-        ${active.length === 0 && recentDone.length === 0 ? '<div class="scrum-col-empty">No active tasks 🌱</div>' : ''}
-        ${active.map((t) => scrumCard(t, ctx, now)).join('')}
+      <div class="scrum-person-list">
+        ${active.map((t) => scrumRow(t, ctx, now)).join('')}
         ${recentDone.length ? `
           <div class="scrum-done-divider">recently bloomed</div>
-          ${recentDone.map((t) => scrumCard(t, ctx, now)).join('')}
+          ${recentDone.map((t) => scrumRow(t, ctx, now)).join('')}
         ` : ''}
       </div>
     </div>
   `
 }
 
-function scrumCard(task, ctx, now) {
+function scrumRow(task, ctx, now) {
   const project = ctx.projects.find((p) => p.id === task.projectId)
   const client = ctx.clients.find((c) => c.id === task.clientId)
   const isDone = task.status === 'done'
   const updatedMs = toDate(task.updatedAt)?.getTime?.() || now
   const isStale = task.status === 'in_progress' && (now - updatedMs) > STALE_DAYS * 86400000
+  const flag = flags.get(task.id)
+
+  const clientLogo = client?.logoUrl
+    ? `<img class="client-logo-xs" src="${client.logoUrl}" alt="${esc(client.name)}" title="${esc(client.name)}">`
+    : ''
 
   return `
-    <div class="task-card scrum-card${isDone ? ' done' : ''}" data-id="${task.id}">
-      <div class="task-card-header">
-        ${task.priority === 'urgent' ? '<i class="ph-fill ph-warning urgent-icon"></i>' : ''}
-        <span class="task-card-title">${esc(task.title)}</span>
-        ${isStale ? `<span class="scrum-stale" title="Untouched for ${STALE_DAYS}+ days — water me?">🥀</span>` : ''}
-      </div>
-      ${(client || project) ? `
-      <div class="task-card-meta"><div class="task-card-tags">
-        ${client ? `<span class="task-tag">${esc(client.name)}</span>` : ''}
-        ${project ? `<span class="task-tag">${esc(project.name)}</span>` : ''}
-      </div></div>` : ''}
-      <div class="scrum-quick-row" data-id="${task.id}">
-        ${['todo', 'in_progress', 'review'].map((s) => {
-          const st = STATUSES.find((x) => x.id === s)
-          return `<button class="scrum-quick${task.status === s ? ' active' : ''}" data-set-status="${s}" style="--sc:${st.color}">${st.label}</button>`
-        }).join('')}
-        <button class="scrum-quick scrum-quick-done${isDone ? ' active' : ''}" data-done-menu style="--sc:var(--success)">
-          Done${isDone && task.closedAt ? ` · ${shortDay(task.closedAt)}` : ''} <i class="ph ph-caret-down"></i>
+    <div class="my-task-row scrum-row${isDone ? ' done' : ''}${flag ? ' flagged' : ''}" data-id="${task.id}">
+      ${statusDot(task.status)}
+      ${task.priority === 'urgent' ? '<i class="ph-fill ph-warning urgent-icon"></i>' : ''}
+      ${clientLogo}
+      ${client && !client.logoUrl ? `<span class="my-task-project">${esc(client.name)}</span>` : ''}
+      ${project ? `<span class="my-task-project">${esc(project.name)}</span>` : ''}
+      <span class="my-task-title">${esc(task.title)}</span>
+      ${isStale ? `<span class="scrum-stale" title="Untouched for ${STALE_DAYS}+ days — water me?">🥀</span>` : ''}
+      <div class="scrum-row-actions">
+        <button class="scrum-flag-btn${flag ? ' on' : ''}" data-flag title="${flag ? `Flagged by ${esc(flag.name)} — click to unflag` : 'Flag for discussion'}">
+          <i class="ph${flag ? '-fill' : ''} ph-chat-circle-dots"></i>
         </button>
+        <div class="scrum-quick-row">
+          ${['todo', 'in_progress', 'review'].map((s) => {
+            const st = STATUSES.find((x) => x.id === s)
+            return `<button class="scrum-quick${task.status === s ? ' active' : ''}" data-set-status="${s}" style="--sc:${st.color}" title="${st.label}">${st.label}</button>`
+          }).join('')}
+          <button class="scrum-quick scrum-quick-done${isDone ? ' active' : ''}" data-done-menu style="--sc:var(--success)">
+            Done${isDone && task.closedAt ? ` · ${shortDay(task.closedAt)}` : ''} <i class="ph ph-caret-down"></i>
+          </button>
+        </div>
       </div>
     </div>
   `
 }
 
-function bindCardActions(container, tasks, ctx, todayStr) {
+function statusDot(status) {
+  const st = STATUSES.find((s) => s.id === status)
+  const icon = { todo: 'ph ph-circle', in_progress: 'ph-fill ph-circle-half', review: 'ph-fill ph-caret-circle-double-right', done: 'ph-fill ph-check-circle', backlog: 'ph-fill ph-prohibit' }[status] || 'ph ph-circle'
+  return `<i class="${icon} status-icon" style="color:${st?.color || 'var(--text-tertiary)'}"></i>`
+}
+
+function bindRowActions(container, tasks, ctx, todayStr) {
   // Direct status set
   container.querySelectorAll('[data-set-status]').forEach((btn) => {
     btn.addEventListener('click', async (e) => {
       e.stopPropagation()
       const id = btn.closest('[data-id]').dataset.id
-      const status = btn.dataset.setStatus
       btn.disabled = true
-      await updateTask(ctx.db, id, { status })
+      await updateTask(ctx.db, id, { status: btn.dataset.setStatus })
       await ctx.onSave?.()
     })
   })
@@ -298,6 +445,7 @@ function bindCardActions(container, tasks, ctx, todayStr) {
           : { status: 'done', closedAt: dateStr }
         await updateTask(ctx.db, id, payload)
         doneThisScrum.add(id)
+        if (flags.has(id)) { const t = tasks.find((x) => x.id === id); if (t) toggleFlag(t) } // done ⇒ discussion resolved
         const tally = document.getElementById('scrum-tally')
         if (tally) tally.innerHTML = `🌼 <b>${doneThisScrum.size}</b> done this scrum`
         burstConfetti(e.clientX, e.clientY)
@@ -306,10 +454,21 @@ function bindCardActions(container, tasks, ctx, todayStr) {
     })
   })
 
-  // Card click → task modal (via ctx.onTaskClick if provided by main)
-  container.querySelectorAll('.scrum-card').forEach((card) => {
-    card.addEventListener('click', () => {
-      const task = tasks.find((t) => t.id === card.dataset.id)
+  // Flag for discussion
+  container.querySelectorAll('[data-flag]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation()
+      const id = btn.closest('[data-id]').dataset.id
+      const task = tasks.find((t) => t.id === id)
+      if (task) toggleFlag(task)
+    })
+  })
+
+  // Row click → task modal
+  container.querySelectorAll('.scrum-row').forEach((row) => {
+    row.addEventListener('click', (e) => {
+      if (e.target.closest('button')) return
+      const task = tasks.find((t) => t.id === row.dataset.id)
       if (task && ctx.onTaskClick) ctx.onTaskClick(task)
     })
   })
@@ -402,7 +561,7 @@ function startTimer(container) {
 
 // ── Live cursors over the board ──
 
-function mountCursors(board, wrap) {
+function mountCursors(board) {
   boardEl = board
   if (!cursorLayer) {
     cursorLayer = document.createElement('div')
@@ -411,8 +570,8 @@ function mountCursors(board, wrap) {
   board.appendChild(cursorLayer) // re-host across re-renders (garden pattern)
   cursors.forEach((c) => { if (c.el) cursorLayer.appendChild(c.el) })
 
-  wrap.addEventListener('pointermove', onBoardPointerMove)
-  wrap.addEventListener('pointerleave', () => {
+  board.addEventListener('pointermove', onBoardPointerMove)
+  board.addEventListener('pointerleave', () => {
     if (rdb && cfg.rtdb && joined) rdb.remove(rdb.ref(cfg.rtdb, `scrum/${ROOM_ID}/cursors/${cfg.user.uid}`)).catch(() => {})
   })
 
@@ -424,16 +583,19 @@ function mountCursors(board, wrap) {
   if (!rafId) rafId = requestAnimationFrame(cursorLoop)
 }
 
+function contentEl() { return boardEl?.querySelector('.scrum-content') || boardEl }
+
 function onBoardPointerMove(e) {
   if (!joined || !boardEl) return
   const now = Date.now()
   if (now - lastCursorWrite < CURSOR_WRITE_MS) return
   lastCursorWrite = now
-  const r = boardEl.getBoundingClientRect()
-  // Normalize against the full scrollable content, so cursors line up even
-  // when participants have scrolled the board differently.
-  const x = (e.clientX - r.left) / (boardEl.scrollWidth || 1)
-  const y = (e.clientY - r.top) / (boardEl.scrollHeight || 1)
+  const el = contentEl()
+  const r = el.getBoundingClientRect()
+  // Normalize against the full content box, so cursors line up even when
+  // participants have scrolled to different places.
+  const x = (e.clientX - r.left) / (r.width || 1)
+  const y = (e.clientY - r.top) / (r.height || 1)
   if (rdb && cfg.rtdb) {
     rdb.set(rdb.ref(cfg.rtdb, `scrum/${ROOM_ID}/cursors/${cfg.user.uid}`), {
       name: cfg.user.name, color: cfg.user.color, x, y, t: rdb.serverTimestamp(),
@@ -480,8 +642,9 @@ function ensureCursorEl(c) {
 function cursorLoop() {
   rafId = null
   if (!boardEl || !boardEl.isConnected) { boardEl = null; return }
-  const w = boardEl.scrollWidth || 1
-  const h = boardEl.scrollHeight || 1
+  const el = contentEl()
+  const w = el.scrollWidth || 1
+  const h = el.scrollHeight || 1
   if (cfg.isDemo && !cfg.rtdb) driftGhostCursors()
   for (const c of cursors.values()) {
     c.x += (c.tx - c.x) * 0.22
@@ -517,7 +680,7 @@ function driftGhostCursors() {
   for (const [uid, c] of cursors) {
     if (!uid.startsWith('ghost_')) continue
     c.tx = 0.5 + 0.35 * Math.sin(t * 0.00011 + c.seed)
-    c.ty = 0.45 + 0.3 * Math.cos(t * 0.00017 + c.seed * 1.3)
+    c.ty = 0.25 + 0.2 * Math.cos(t * 0.00017 + c.seed * 1.3)
   }
 }
 

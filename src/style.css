@@ -6845,25 +6845,154 @@ body {
 }
 .scrum-leave-btn:hover { color: var(--danger-hover); border-color: var(--danger-hover); }
 
-.scrum-board-wrap {
+.scrum-scroll {
   flex: 1;
   overflow: auto;
   min-height: 0;
-}
-.scrum-board {
   position: relative; /* cursor layer anchors here */
 }
+.scrum-content {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 16px 20px 80px;
+}
 
-/* Columns & cards */
-.scrum-col-header { cursor: pointer; }
-.scrum-col-header:hover .column-label { color: var(--primary); }
-.scrum-col-avatar {
-  width: 22px;
-  height: 22px;
+/* Rules card */
+.scrum-rules {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  margin-bottom: 14px;
+  overflow: hidden;
+}
+.scrum-rules-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  cursor: pointer;
+}
+.scrum-rules-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.scrum-rules-title i { color: var(--primary); font-size: 15px; }
+.scrum-rules-list {
+  margin: 0;
+  padding: 0 16px 12px 34px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+.scrum-rules-list b { color: var(--text); }
+.scrum-rules-flag-icon { color: var(--primary); vertical-align: -2px; }
+.scrum-rules.collapsed .scrum-rules-list { display: none; }
+
+/* Needs Discussion panel — the meeting's agenda, grouped by client */
+.scrum-discuss {
+  border: 1px solid color-mix(in srgb, var(--primary) 35%, var(--border));
+  border-radius: var(--radius-lg);
+  background: var(--primary-light);
+  margin-bottom: 14px;
+  padding: 10px 14px 12px;
+}
+.scrum-discuss-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--primary);
+  margin-bottom: 6px;
+}
+.scrum-discuss-count {
+  background: var(--primary);
+  color: white;
+  border-radius: 999px;
+  padding: 0 7px;
+  font-size: 11px;
+}
+.scrum-discuss-client {
+  font-size: 10.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-secondary);
+  margin: 8px 0 3px;
+}
+.scrum-discuss-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  margin-bottom: 4px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.scrum-discuss-item:hover { border-color: var(--primary); }
+.scrum-discuss-title {
+  font-weight: 600;
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.scrum-discuss-by {
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+.scrum-discuss-resolve {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.scrum-discuss-resolve:hover { color: var(--success); border-color: var(--success); }
+
+/* Person sections — backlog-style rows */
+.scrum-person { margin-bottom: 18px; }
+.scrum-person-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 4px;
+  cursor: pointer;
+  user-select: none;
+}
+.scrum-person-header:hover .scrum-person-name { color: var(--primary); }
+.scrum-person-avatar {
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   object-fit: cover;
 }
-.scrum-col-avatar-fallback {
+.scrum-person-avatar-fallback {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -6871,6 +7000,67 @@ body {
   font-size: 11px;
   font-weight: 700;
 }
+.scrum-person-name {
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+}
+.scrum-person-here {
+  color: var(--success);
+  font-size: 9px;
+}
+.scrum-person-count {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+}
+.scrum-person-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Rows (reuse .my-task-row look) */
+.scrum-row { cursor: pointer; }
+.scrum-row.done .my-task-title {
+  text-decoration: line-through;
+  color: var(--text-tertiary);
+}
+.scrum-row.flagged {
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--border));
+  background: var(--primary-light);
+}
+.scrum-row-pulse {
+  animation: scrum-row-pulse 0.8s ease-in-out 2;
+}
+@keyframes scrum-row-pulse {
+  50% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 35%, transparent); }
+}
+.scrum-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.scrum-flag-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-tertiary);
+  font-size: 15px;
+  cursor: pointer;
+}
+.scrum-flag-btn:hover { color: var(--primary); background: var(--primary-light); }
+.scrum-flag-btn.on { color: var(--primary); }
+
 .scrum-col-blooms {
   font-size: 11px;
   font-weight: 700;
@@ -6879,38 +7069,27 @@ body {
   padding: 1px 7px;
   border-radius: 999px;
 }
-.scrum-col-empty {
-  text-align: center;
-  padding: 18px 8px;
-  color: var(--text-tertiary);
-  font-size: 12.5px;
-}
-.scrum-card { cursor: pointer; }
 .scrum-stale {
-  margin-left: auto;
   font-size: 13px;
   filter: saturate(0.8);
 }
 .scrum-done-divider {
-  text-align: center;
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.8px;
   text-transform: uppercase;
   color: var(--text-tertiary);
-  margin: 8px 0 4px;
+  margin: 6px 0 0 4px;
 }
 .scrum-quick-row {
   display: flex;
   gap: 4px;
-  margin-top: 8px;
 }
 .scrum-quick {
-  flex: 1;
-  padding: 4px 2px;
+  padding: 4px 9px;
   border: 1px solid var(--border);
   border-radius: 6px;
-  background: transparent;
+  background: var(--surface);
   color: var(--text-secondary);
   font-family: inherit;
   font-size: 10.5px;
@@ -7195,4 +7374,6 @@ body {
 @media (max-width: 720px) {
   .profile-stats-grid, .profile-awards-grid { grid-template-columns: repeat(2, 1fr); }
   .scrum-header-mid { order: 3; width: 100%; justify-content: flex-start; }
+  .my-task-row.scrum-row { flex-wrap: wrap; }
+  .scrum-row-actions { width: 100%; margin-left: 0; justify-content: flex-end; }
 }
