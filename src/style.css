@@ -918,6 +918,36 @@ body {
   pointer-events: none;
 }
 
+/* Completion pop — icon bounces and a success ring expands outward */
+.status-btn.status-pop {
+  position: relative;
+}
+
+.status-btn.status-pop .status-icon {
+  animation: status-pop 0.4s var(--ease-bounce);
+}
+
+.status-btn.status-pop::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  border: 2px solid var(--success);
+  animation: done-ring 0.45s ease-out forwards;
+  pointer-events: none;
+}
+
+@keyframes status-pop {
+  0% { transform: scale(0.6); }
+  55% { transform: scale(1.25); }
+  100% { transform: scale(1); }
+}
+
+@keyframes done-ring {
+  0% { transform: scale(0.6); opacity: 0.9; }
+  100% { transform: scale(1.9); opacity: 0; }
+}
+
 .status-icon {
   font-size: 18px;
   flex-shrink: 0;
@@ -960,7 +990,7 @@ body {
   box-shadow: var(--toast-shadow);
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.25s ease, transform 0.25s ease;
+  transition: opacity 0.2s ease, transform 0.35s var(--ease-bounce);
   z-index: 9999;
   max-width: 560px;
   display: flex;
@@ -984,6 +1014,7 @@ body {
 .status-toast.hide {
   opacity: 0;
   transform: translateX(-50%) translateY(20px);
+  transition: opacity 0.2s ease, transform 0.2s ease-in;
 }
 
 .status-toast-msg {
@@ -1066,7 +1097,38 @@ body {
 
 .task-card.dragging {
   opacity: 0.4;
+  transform: scale(1.02) rotate(1deg);
+  box-shadow: var(--shadow-lg);
 }
+
+/* Entrance stagger — cards rise in as a column renders */
+.column-tasks > .task-card {
+  animation: card-in var(--dur-base) var(--ease-out) backwards;
+}
+
+.column-tasks > .task-card:nth-child(2) { animation-delay: 25ms; }
+.column-tasks > .task-card:nth-child(3) { animation-delay: 50ms; }
+.column-tasks > .task-card:nth-child(4) { animation-delay: 75ms; }
+.column-tasks > .task-card:nth-child(5) { animation-delay: 100ms; }
+.column-tasks > .task-card:nth-child(6) { animation-delay: 125ms; }
+.column-tasks > .task-card:nth-child(n + 7) { animation-delay: 150ms; }
+
+@keyframes card-in {
+  from { opacity: 0; transform: translateY(5px); }
+}
+
+.my-day-upnext-list > .my-day-card,
+.my-day-weekday-list > .my-day-card,
+.my-day-focus-list > .my-day-card {
+  animation: card-in var(--dur-base) var(--ease-out) backwards;
+}
+
+.my-day-upnext-list > .my-day-card:nth-child(2),
+.my-day-weekday-list > .my-day-card:nth-child(2) { animation-delay: 25ms; }
+.my-day-upnext-list > .my-day-card:nth-child(3),
+.my-day-weekday-list > .my-day-card:nth-child(3) { animation-delay: 50ms; }
+.my-day-upnext-list > .my-day-card:nth-child(n + 4),
+.my-day-weekday-list > .my-day-card:nth-child(n + 4) { animation-delay: 75ms; }
 
 /* Done state — grayed out, but looks normal on hover */
 .task-card.done {
@@ -1534,9 +1596,42 @@ body {
   100% { transform: translate(-50%, -100%) scale(1); opacity: 1; }
 }
 
+/* Removal — flower wilts: droops, shrinks and fades before it's pruned */
+.garden-flower.wilting {
+  animation: garden-wilt 0.45s ease-in both;
+}
+
+@keyframes garden-wilt {
+  0% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -92%) scale(0.7) rotate(8deg); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .garden-blade { animation: none; }
   .garden-flower { animation: none; }
+  .garden-flower.wilting { animation: none; opacity: 0; }
+  .modal-overlay,
+  .modal,
+  .modal-overlay.closing,
+  .modal-overlay.closing .modal,
+  .column-tasks > .task-card,
+  .my-day-upnext-list > .my-day-card,
+  .my-day-weekday-list > .my-day-card,
+  .my-day-focus-list > .my-day-card,
+  .ctx-submenu.open,
+  .mobile-nav-btn.active i,
+  .status-btn.status-pop .status-icon {
+    animation: none;
+  }
+  .status-btn.status-pop::after {
+    content: none;
+  }
+  .my-day-section[data-section] {
+    transition: none;
+  }
+  .status-toast {
+    transition: opacity 0.2s ease;
+  }
 }
 
 .my-day-greeting-row {
@@ -1800,7 +1895,28 @@ body {
   color: var(--text-tertiary);
 }
 
-/* Collapsible accordion sections (Unscheduled + weekdays) */
+/* Collapsible accordion sections (Unscheduled + weekdays).
+   Grid-row 0fr/1fr trick animates the list height without measuring it. */
+.my-day-section[data-section] {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  transition: grid-template-rows var(--dur-slow) var(--ease-out);
+}
+
+.my-day-section[data-section] > .my-day-upnext-list,
+.my-day-section[data-section] > .my-day-weekday-list {
+  overflow: hidden;
+}
+
+.my-day-section[data-section].collapsed > .my-day-upnext-list,
+.my-day-section[data-section].collapsed > .my-day-weekday-list {
+  min-height: 0;
+}
+
+.my-day-section[data-section].collapsed {
+  grid-template-rows: auto 0fr;
+}
+
 .my-day-section[data-section] .my-day-section-header {
   cursor: pointer;
   user-select: none;
@@ -1823,7 +1939,7 @@ body {
 
 .my-day-section.collapsed .my-day-upnext-list,
 .my-day-section.collapsed .my-day-weekday-list {
-  display: none;
+  pointer-events: none;
 }
 
 /* Focus, Up Next & Weekday drop zones */
@@ -2064,6 +2180,7 @@ body {
   justify-content: center;
   z-index: 200;
   backdrop-filter: blur(2px);
+  animation: overlay-in var(--dur-base) ease-out;
 }
 
 .modal {
@@ -2075,6 +2192,31 @@ body {
   max-height: 85vh;
   display: flex;
   flex-direction: column;
+  animation: modal-in var(--dur-base) var(--ease-out);
+}
+
+.modal-overlay.closing {
+  animation: overlay-out var(--dur-fast) ease-in both;
+}
+
+.modal-overlay.closing .modal {
+  animation: modal-out var(--dur-fast) ease-in both;
+}
+
+@keyframes overlay-in {
+  from { opacity: 0; }
+}
+
+@keyframes overlay-out {
+  to { opacity: 0; }
+}
+
+@keyframes modal-in {
+  from { opacity: 0; transform: scale(0.97) translateY(6px); }
+}
+
+@keyframes modal-out {
+  to { opacity: 0; transform: scale(0.98) translateY(4px); }
 }
 
 .modal-header {
@@ -2153,7 +2295,7 @@ body {
   font-size: 16px;
   color: var(--text);
   background: var(--input-bg);
-  transition: border-color 0.15s;
+  transition: border-color 0.15s, box-shadow 0.15s ease;
 }
 
 .form-input:focus,
@@ -3343,6 +3485,11 @@ body {
 
 .ctx-submenu.open {
   display: block;
+  animation: submenu-in var(--dur-fast) var(--ease-out);
+}
+
+@keyframes submenu-in {
+  from { opacity: 0; transform: translateX(-4px); }
 }
 
 /* Schedule submenu — mini calendar */
@@ -4581,6 +4728,16 @@ body {
 
 .mobile-nav-btn.active {
   color: var(--primary);
+}
+
+.mobile-nav-btn.active i {
+  animation: nav-pop 0.3s var(--ease-bounce);
+}
+
+@keyframes nav-pop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+  100% { transform: scale(1); }
 }
 
 .mobile-nav-btn:active {

@@ -204,6 +204,7 @@ document.addEventListener('click', async (e) => {
   const newStatus = task.status === 'done' ? 'todo' : 'done'
 
   btn.disabled = true
+  btn.classList.add('status-pop')
   await updateTask(db, taskId, { status: newStatus })
 
   showStatusToast(task.title, newStatus, taskId, previousStatus)

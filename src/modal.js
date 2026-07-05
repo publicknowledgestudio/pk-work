@@ -402,7 +402,8 @@ export function openModal(task, ctx) {
     notesList.innerHTML = ''
   }
 
-  // Show modal
+  // Show modal (clear a still-running exit animation if reopened quickly)
+  overlay.classList.remove('closing')
   overlay.classList.remove('hidden')
   document.getElementById('task-title').focus()
 }
@@ -438,7 +439,12 @@ function renderAssigneeSelector() {
 }
 
 function close() {
-  overlay.classList.add('hidden')
+  // Play the exit animation, then hide (display:none kills animations)
+  overlay.classList.add('closing')
+  setTimeout(() => {
+    overlay.classList.remove('closing')
+    overlay.classList.add('hidden')
+  }, 120)
   closeProjectPicker()
   currentTask = null
   currentCtx = null

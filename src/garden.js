@@ -343,7 +343,15 @@ function deleteMessage(id) {
   if (rdb && messagesRef && !id.startsWith('local_') && !id.startsWith('ghost_')) {
     rdb.remove(rdb.ref(cfg.rtdb, `gardens/${GARDEN_ID}/messages/${id}`)).catch(() => {})
   }
-  if (m) { m.el?.remove(); messages.delete(id) }
+  if (m) {
+    const el = m.el
+    messages.delete(id)
+    if (el) {
+      // Wilt before pruning; loop() no longer repositions it so it stays put
+      el.classList.add('wilting')
+      setTimeout(() => el.remove(), 500)
+    }
+  }
 }
 
 // ── Reconcile remote state from RTDB ──

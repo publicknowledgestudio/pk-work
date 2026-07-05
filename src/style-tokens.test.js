@@ -53,6 +53,12 @@ const MODE_INVARIANT_TOKENS = new Set([
   '--font',
   '--font-mono',
   '--hover', // alias of --surface-hover, which itself flips
+  // Motion tokens — easing and durations don't flip with color scheme
+  '--ease-out',
+  '--ease-bounce',
+  '--dur-fast',
+  '--dur-base',
+  '--dur-slow',
 ])
 
 // Palette tokens (tier 1) are mode-invariant raw colors. Semantic tokens
