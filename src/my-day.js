@@ -4,6 +4,7 @@ import { openModal } from './modal.js'
 import { attachMention } from './mention.js'
 import { loadCalendarEvents, ensureCalendarToken, getAccessToken } from './calendar.js'
 import { mountGarden } from './garden.js'
+import { renderScrumWidget } from './scrum.js'
 import { renderTimeGrid, bindTimeGridActions, isTimeGridDragging } from './time-grid.js'
 import { setSelectedTaskIds, clearSelection } from './context-menu.js'
 import { toDate, formatShortDate, toLocalISODate } from './utils/dates.js'
@@ -235,6 +236,12 @@ export async function renderMyDay(container, tasks, currentUser, ctx) {
     calendarNeedsAuth = cal.needsAuth
   }
 
+  // The awaits above can outlive a route change (e.g. deep-linking straight to
+  // #/scrum renders my-day first as the default view) — don't clobber whatever
+  // view the router has since put into this container.
+  const routeNow = (location.hash || '').replace(/^#/, '')
+  if (routeNow && !routeNow.startsWith('/my-week')) return
+
   const viewingMember = TEAM.find((m) => m.email === targetEmail)
   const viewingName = viewingMember?.name || currentUser?.displayName || ''
 
@@ -314,12 +321,15 @@ export async function renderMyDay(container, tasks, currentUser, ctx) {
               <button class="week-nav-btn" id="week-next" title="Next week"><i class="ph ph-caret-right"></i></button>
             </div>
           </div>
-          ${isOwnDay ? `
-          <button class="myday-cal-toggle${calendarOpen ? ' active' : ''}" id="myday-cal-toggle" title="${calendarOpen ? 'Hide calendar' : 'Show calendar'}">
-            <i class="ph${calendarOpen ? '-fill' : ''} ph-calendar-blank"></i>
-            <span>Calendar</span>
-          </button>
-          ` : ''}
+          <div class="my-day-header-actions">
+            <span id="scrum-widget"></span>
+            ${isOwnDay ? `
+            <button class="myday-cal-toggle${calendarOpen ? ' active' : ''}" id="myday-cal-toggle" title="${calendarOpen ? 'Hide calendar' : 'Show calendar'}">
+              <i class="ph${calendarOpen ? '-fill' : ''} ph-calendar-blank"></i>
+              <span>Calendar</span>
+            </button>
+            ` : ''}
+          </div>
         </div>
 
         ${activeClients.length > 0 ? `
@@ -509,6 +519,7 @@ function bindMyDayActions(container, tasks, currentUser, ctx, now, isOwnDay, { c
 
   // Cursor Garden — re-host the persistent garden layer into this render's header
   mountGarden(container.querySelector('.my-day-header'))
+  renderScrumWidget(container.querySelector('#scrum-widget'))
 
   // Calendar panel show/hide toggle (persisted, collapsed by default)
   const calToggle = container.querySelector('#myday-cal-toggle')

@@ -1,5 +1,23 @@
 {
   "rules": {
+    "scrum": {
+      "$room": {
+        "participants": {
+          ".read": "auth != null && auth.token.email.matches(/@publicknowledge\\.co$/)",
+          "$uid": {
+            ".write": "auth != null && auth.uid == $uid && auth.token.email.matches(/@publicknowledge\\.co$/)",
+            ".validate": "newData.val() == null || (newData.hasChildren(['name','email']) && newData.child('name').isString() && newData.child('email').isString())"
+          }
+        },
+        "cursors": {
+          ".read": "auth != null && auth.token.email.matches(/@publicknowledge\\.co$/)",
+          "$uid": {
+            ".write": "auth != null && auth.uid == $uid && auth.token.email.matches(/@publicknowledge\\.co$/)",
+            ".validate": "newData.val() == null || (newData.hasChildren(['x','y']) && newData.child('x').isNumber() && newData.child('y').isNumber() && newData.child('name').isString() && newData.child('color').isString())"
+          }
+        }
+      }
+    },
     "gardens": {
       "$garden": {
         "cursors": {

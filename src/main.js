@@ -21,6 +21,8 @@ import { initContextMenu } from './context-menu.js'
 import { setAccessToken, clearAccessToken, ensureCalendarToken } from './calendar.js'
 import { isDemo, DEMO_USER } from './demo.js'
 import { configureGarden, mountGarden, unmountGarden } from './garden.js'
+import { configureScrum, renderScrum, scrumViewHidden } from './scrum.js'
+import { renderProfile } from './profile.js'
 import { renderClientBoard } from './client-board.js'
 import { renderClientTimesheets } from './client-timesheets.js'
 import { renderClientTimeline } from './client-timeline.js'
@@ -77,6 +79,7 @@ const ROUTES = {
   '/board/team':    { view: 'board', boardView: 'assignee' },
   '/board/clients': { view: 'board', boardView: 'client' },
   '/board/projects':{ view: 'board', boardView: 'project' },
+  '/scrum':         { view: 'scrum' },
   '/timeline':      { view: 'team-timeline' },
   '/timesheets':    { view: 'timesheets' },
   '/people':        { view: 'people' },
@@ -90,7 +93,7 @@ const ROUTES = {
 }
 
 const VIEW_TO_PATH = {
-  'my-day': '/my-week', 'backlog': '/backlog', 'team-timeline': '/timeline',
+  'my-day': '/my-week', 'backlog': '/backlog', 'scrum': '/scrum', 'team-timeline': '/timeline',
   'timesheets': '/timesheets', 'people': '/people',
   'references': '/references', 'clients': '/manage',
   'attendance': '/attendance', 'contracts': '/contracts',
@@ -102,7 +105,10 @@ const BOARD_TO_PATH = {
   'client': '/board/clients', 'project': '/board/projects',
 }
 
-const TEAM_ONLY_VIEWS = ['my-day', 'backlog', 'board', 'team-timeline', 'timesheets', 'people', 'references', 'clients', 'attendance', 'contracts']
+const TEAM_ONLY_VIEWS = ['my-day', 'backlog', 'board', 'scrum', 'profile', 'team-timeline', 'timesheets', 'people', 'references', 'clients', 'attendance', 'contracts']
+
+// #/profile/<email> — parameterized route, resolved outside the static table
+let currentProfileEmail = ''
 
 function navigateTo(view, boardView) {
   const path = view === 'board'
@@ -113,7 +119,14 @@ function navigateTo(view, boardView) {
 
 function handleRouteChange() {
   const hash = (location.hash || '').replace(/^#/, '')
-  const route = ROUTES[hash]
+  let route = ROUTES[hash]
+  if (!route && hash.startsWith('/profile')) {
+    currentProfileEmail = decodeURIComponent(hash.slice('/profile'.length).replace(/^\//, ''))
+    route = { view: 'profile' }
+  }
+
+  // Tell the scrum room its view went away (drops presence + cursors)
+  if (currentView === 'scrum' && route?.view !== 'scrum') scrumViewHidden()
 
   if (route && userRole === 'client' && TEAM_ONLY_VIEWS.includes(route.view)) {
     currentView = 'client-board'
@@ -611,7 +624,10 @@ if (!isDemo()) onAuthStateChanged(auth, async (user) => {
 
     // Cursor Garden — team members only (clients never see My Week)
     if (userRole === 'team') {
-      initRtdb().then((rdb) => configureGarden({ rtdb: rdb, user: currentUser, isDemo: false }))
+      initRtdb().then((rdb) => {
+        configureGarden({ rtdb: rdb, user: currentUser, isDemo: false })
+        configureScrum({ rtdb: rdb, user: currentUser, isDemo: false })
+      })
     }
 
     // Read initial route from hash (or default)
@@ -670,6 +686,7 @@ async function bootstrapDemo() {
 
   // Cursor Garden — local-only in demo (no RTDB), with a synthetic gardener.
   configureGarden({ rtdb: null, user: DEMO_USER, isDemo: true })
+  configureScrum({ rtdb: null, user: DEMO_USER, isDemo: true })
 
   handleRouteChange()
 }
@@ -1057,6 +1074,7 @@ function buildCtx() {
     db, currentUser, clients, projects, people, allTasks,
     userRole, userClientId, userClientName,
     onSave: renderCurrentView,
+    onTaskClick: (task) => openModal(task, buildCtx()),
     filterClientId: '',
     filterProjectId: '',
     reconnectCalendar,
@@ -1120,6 +1138,13 @@ if (currentView !== 'references') cleanupReferences()
       break
     case 'team-timeline':
       renderTeamTimeline(mainContent, tasks, ctx)
+      break
+    case 'scrum':
+      // Unfiltered: standup walks everyone's work regardless of header filters
+      renderScrum(mainContent, allTasks, ctx)
+      break
+    case 'profile':
+      renderProfile(mainContent, allTasks, ctx, currentProfileEmail || currentUser?.email)
       break
   }
 }

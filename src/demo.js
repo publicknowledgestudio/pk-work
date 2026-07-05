@@ -108,6 +108,15 @@ function makeTasks() {
     // as "dormant"; Absentia is archived. Both drop off the working boards.
     { id: 't13', title: 'Mercury site copy review', description: '', assignees: [ME], status: 'done', priority: 'medium', clientId: 'c_mercury', projectId: 'p_mercury_web', deadline: null, notes: [], createdAt: iso(addDays(NOW, -9)), updatedAt: iso(addDays(NOW, -5)), closedAt: iso(addDays(NOW, -5)), createdBy: ME },
     { id: 't14', title: 'Absentia brand guidelines v1', description: '', assignees: [ME], status: 'done', priority: 'low', clientId: 'c_absentia', projectId: 'p_absentia_brand', deadline: null, notes: [], createdAt: iso(addDays(NOW, -20)), updatedAt: iso(addDays(NOW, -12)), closedAt: iso(addDays(NOW, -12)), createdBy: ME },
+    // Teammates' tasks — so the Scrum room and profile screens have company.
+    { id: 't15', title: 'Presentations.ai illustration set', description: '', assignees: ['charu@publicknowledge.co'], status: 'in_progress', priority: 'high', clientId: 'c_pres', projectId: 'p_pres_blog', deadline: iso(addDays(NOW, 2)), notes: [], createdAt: iso(addDays(NOW, -4)), updatedAt: iso(addDays(NOW, -4)), closedAt: null, createdBy: 'charu@publicknowledge.co' },
+    { id: 't16', title: 'Hammock label print test', description: '', assignees: ['charu@publicknowledge.co'], status: 'done', priority: 'medium', clientId: 'c_hammock', projectId: 'p_hammock_pack', deadline: null, notes: [], createdAt: iso(addDays(NOW, -3)), updatedAt: iso(addDays(NOW, -1)), closedAt: iso(addDays(NOW, -1)), createdBy: 'charu@publicknowledge.co' },
+    { id: 't17', title: 'SCC style tile exploration', description: '', assignees: ['sharang@publicknowledge.co'], status: 'review', priority: 'medium', clientId: 'c_scc', projectId: 'p_scc_redesign', deadline: iso(addDays(NOW, 1)), notes: [], createdAt: iso(addDays(NOW, -2)), updatedAt: iso(addDays(NOW, -1)), closedAt: null, createdBy: 'sharang@publicknowledge.co' },
+    { id: 't18', title: 'Brunk reels template', description: '', assignees: ['anandu@publicknowledge.co'], status: 'todo', priority: 'medium', clientId: 'c_brunk', projectId: 'p_brunk_social', deadline: null, notes: [], createdAt: iso(addDays(NOW, -1)), updatedAt: iso(addDays(NOW, -1)), closedAt: null, createdBy: ME },
+    // Older completions for Gyan — feeds the profile screen's streaks/weeks chart.
+    { id: 't19', title: 'Brunk moodboard round 1', description: '', assignees: [ME], status: 'done', priority: 'medium', clientId: 'c_brunk', projectId: 'p_brunk_brand', deadline: null, notes: [], createdAt: iso(addDays(NOW, -16)), updatedAt: iso(addDays(NOW, -14)), closedAt: iso(addDays(NOW, -14)), createdBy: ME },
+    { id: 't20', title: 'Hammock texture research', description: '', assignees: [ME], status: 'done', priority: 'low', clientId: 'c_hammock', projectId: 'p_hammock_pack', deadline: null, notes: [], createdAt: iso(addDays(NOW, -15)), updatedAt: iso(addDays(NOW, -13)), closedAt: iso(addDays(NOW, -13)), createdBy: ME },
+    { id: 't21', title: 'SCC kickoff notes + scope doc', description: '', assignees: [ME], status: 'done', priority: 'high', clientId: 'c_scc', projectId: 'p_scc_redesign', deadline: null, notes: [], createdAt: iso(addDays(NOW, -22)), updatedAt: iso(addDays(NOW, -21)), closedAt: iso(addDays(NOW, -21)), createdBy: ME },
   ]
 }
 
@@ -146,7 +155,7 @@ const nowIso = () => iso(new Date())
 // Projects / ClientUsers) re-fire after a mutation. The page re-renders off the
 // subscription callback — its click handlers don't re-render directly — so a
 // mutation has to notify subscribers, the way Firestore's onSnapshot would.
-const collectionSubs = { clients: new Set(), projects: new Set(), clientUsers: new Set() }
+const collectionSubs = { clients: new Set(), projects: new Set(), clientUsers: new Set(), tasks: new Set() }
 
 function emitCollection(kind) {
   const snapshot = store[kind].map((x) => ({ ...x }))
@@ -172,10 +181,9 @@ export const demo = {
   loadUserProfiles: async () => ({}),
   loadHolidays: async () => store.holidays.map((h) => ({ ...h })),
 
-  subscribeToTasks: (callback) => {
-    callback(store.tasks.map((t) => ({ ...t })))
-    return () => {}
-  },
+  // Live like Firestore's onSnapshot: task mutations re-fire subscribers, so
+  // views that render off the subscription (board, scrum) update in demo too.
+  subscribeToTasks: (callback) => subscribeToCollection('tasks', callback),
 
   loadDailyFocus: async (_email, dateStr) => {
     const f = store.focus.get(dateStr)
@@ -218,6 +226,7 @@ export const demo = {
       closedAt: null,
       createdBy: data.createdBy || '',
     })
+    emitCollection('tasks')
     return { id }
   },
 
@@ -225,14 +234,18 @@ export const demo = {
     const t = store.tasks.find((x) => x.id === taskId)
     if (!t) return
     Object.assign(t, data, { updatedAt: nowIso() })
+    // Match db.js: a string closedAt (backdated "Done On") lands end-of-day
+    if (data.status === 'done' && typeof data.closedAt === 'string') t.closedAt = data.closedAt + 'T23:59:59'
     if (data.status === 'done' && !data.closedAt) t.closedAt = nowIso()
     if (data.status && data.status !== 'done') t.closedAt = null
     if (data.deadline !== undefined) t.deadline = data.deadline ? iso(new Date(data.deadline)) : null
+    emitCollection('tasks')
   },
 
   deleteTask: async (taskId) => {
     const i = store.tasks.findIndex((x) => x.id === taskId)
     if (i >= 0) store.tasks.splice(i, 1)
+    emitCollection('tasks')
   },
 
   loadCalendarEvents: async (dateStr) => {

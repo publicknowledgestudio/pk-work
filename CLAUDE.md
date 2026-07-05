@@ -44,8 +44,12 @@ src/                    Frontend (Vite + vanilla JS)
   main.js               Auth, routing, state
   db.js                 Firestore CRUD operations
   board.js              Kanban board view
-  my-tasks.js           Personal task view
-  standup.js            Standup form
+  my-day.js             My Week — personal weekly planner (daily focus, garden)
+  scrum.js              Scrum Room — live standup view (#/scrum): RTDB presence
+                        ("Join Scrum" pill on the garden), live cursors, quick
+                        status buttons + backdatable "Done On" calendar, confetti
+  profile.js            Game-awards-style stats screen (#/profile/<email>):
+                        streaks, trophies, 12-week chart — all client-computed
   references.js         Visual reference library (grid, search, moodboards)
   modal.js              Task create/edit modal
   client-board.js       Client kanban board (scoped to client org)

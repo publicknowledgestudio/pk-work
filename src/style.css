@@ -6677,3 +6677,522 @@ body {
   font-weight: 400;
   font-size: 11px;
 }
+
+/* ═══════════ Scrum Room ═══════════ */
+
+/* Header actions cluster (Join Scrum + Calendar) in the garden band */
+.my-day-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+  z-index: 5; /* above garden cursors/flowers */
+}
+
+/* Join Scrum pill on the garden */
+.scrum-join-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.12s, box-shadow 0.12s;
+}
+.scrum-join-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+.scrum-join-btn.live {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.scrum-widget-stack {
+  display: inline-flex;
+  align-items: center;
+}
+.scrum-widget-avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid var(--surface);
+  object-fit: cover;
+  margin-left: -6px;
+}
+.scrum-widget-avatar:first-child { margin-left: 0; }
+.scrum-widget-avatar-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+}
+.scrum-live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--success);
+  animation: scrum-pulse 1.6s ease-in-out infinite;
+}
+@keyframes scrum-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.75); }
+}
+
+/* Room layout */
+.scrum-room {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.scrum-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  flex-wrap: wrap;
+}
+.scrum-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.scrum-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 700;
+  font-size: 14px;
+}
+.scrum-timer {
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--surface-hover);
+}
+.scrum-timer.overtime {
+  color: var(--danger-hover);
+  background: var(--danger-soft);
+}
+.scrum-header-mid {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 1;
+  justify-content: center;
+  min-width: 0;
+}
+.scrum-participant { cursor: pointer; }
+.scrum-participant-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid var(--surface);
+  object-fit: cover;
+  transition: transform 0.12s;
+}
+.scrum-participant:hover .scrum-participant-avatar { transform: translateY(-2px) scale(1.08); }
+.scrum-participant-avatar-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+}
+.scrum-participant-hint {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+.scrum-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.scrum-tally {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+.scrum-tally b { color: var(--text); }
+.scrum-leave-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.scrum-leave-btn:hover { color: var(--danger-hover); border-color: var(--danger-hover); }
+
+.scrum-board-wrap {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+}
+.scrum-board {
+  position: relative; /* cursor layer anchors here */
+}
+
+/* Columns & cards */
+.scrum-col-header { cursor: pointer; }
+.scrum-col-header:hover .column-label { color: var(--primary); }
+.scrum-col-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.scrum-col-avatar-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+.scrum-col-blooms {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--success);
+  background: var(--success-soft);
+  padding: 1px 7px;
+  border-radius: 999px;
+}
+.scrum-col-empty {
+  text-align: center;
+  padding: 18px 8px;
+  color: var(--text-tertiary);
+  font-size: 12.5px;
+}
+.scrum-card { cursor: pointer; }
+.scrum-stale {
+  margin-left: auto;
+  font-size: 13px;
+  filter: saturate(0.8);
+}
+.scrum-done-divider {
+  text-align: center;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  margin: 8px 0 4px;
+}
+.scrum-quick-row {
+  display: flex;
+  gap: 4px;
+  margin-top: 8px;
+}
+.scrum-quick {
+  flex: 1;
+  padding: 4px 2px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.1s;
+}
+.scrum-quick:hover {
+  border-color: var(--sc);
+  color: var(--sc);
+}
+.scrum-quick.active {
+  background: var(--sc);
+  border-color: var(--sc);
+  color: #fff;
+}
+.scrum-quick:disabled { opacity: 0.5; cursor: default; }
+.scrum-quick i { font-size: 9px; }
+
+/* Done On popover reuses .ctx-schedule-sub / .ctx-cal-* styles */
+.scrum-doneon-pop {
+  position: fixed;
+  z-index: 1200;
+  display: block;
+  background: var(--surface-raised, var(--surface));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+}
+.ctx-cal-day:disabled {
+  color: var(--text-tertiary);
+  opacity: 0.35;
+  cursor: default;
+}
+.ctx-cal-day:disabled:hover { background: transparent; }
+
+/* Live cursors over the scrum board */
+.scrum-cursor-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 30;
+  overflow: hidden;
+}
+.scrum-cursor {
+  position: absolute;
+  left: 0;
+  top: 0;
+  will-change: transform;
+  filter: drop-shadow(0 1px 2px var(--color-garden-shadow));
+}
+.scrum-cursor-name {
+  display: inline-block;
+  margin: -6px 0 0 14px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Confetti */
+#confetti-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3000;
+}
+.confetti-petal {
+  position: absolute;
+  font-size: 18px;
+  animation: petal-burst var(--dur, 1s) cubic-bezier(0.18, 0.6, 0.35, 1) forwards;
+}
+@keyframes petal-burst {
+  0% { transform: translate(0, 0) rotate(0) scale(0.6); opacity: 1; }
+  70% { opacity: 1; }
+  100% { transform: translate(var(--dx), calc(var(--dy) + 70px)) rotate(var(--rot)) scale(1); opacity: 0; }
+}
+
+/* ═══════════ Profile / Awards Screen ═══════════ */
+
+.profile-screen {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 28px 20px 60px;
+}
+.profile-hero {
+  position: relative;
+  text-align: center;
+  padding: 36px 20px 28px;
+  border-radius: 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+.profile-hero-glow {
+  position: absolute;
+  inset: -40% -20% auto;
+  height: 150%;
+  background: radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--pc) 18%, transparent), transparent 65%);
+  pointer-events: none;
+}
+.profile-avatar-ring {
+  display: inline-flex;
+  padding: 4px;
+  border-radius: 50%;
+  background: conic-gradient(from 20deg, var(--pc), var(--color-amber-400), var(--success), var(--pc));
+  animation: ring-spin 14s linear infinite;
+}
+@keyframes ring-spin {
+  to { filter: hue-rotate(360deg); }
+}
+.profile-avatar {
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  border: 3px solid var(--surface);
+  object-fit: cover;
+  display: block;
+}
+.profile-avatar-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 36px;
+  font-weight: 700;
+}
+.profile-name {
+  position: relative;
+  margin: 14px 0 2px;
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+.profile-subtitle {
+  position: relative;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--pc);
+}
+.profile-since {
+  position: relative;
+  margin-top: 6px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
+.profile-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-top: 16px;
+}
+.profile-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 16px 8px 13px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  transition: transform 0.12s, box-shadow 0.12s;
+}
+.profile-stat:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+.profile-stat-emoji { font-size: 22px; }
+.profile-stat-value {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  line-height: 1.2;
+  text-align: center;
+}
+.profile-stat-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.profile-section-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 28px 0 12px;
+  font-size: 15px;
+  font-weight: 800;
+}
+.profile-award-count {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.profile-awards-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+.profile-award {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 16px 10px 13px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  text-align: center;
+}
+.profile-award.unlocked .profile-award-medal {
+  animation: medal-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.profile-award.locked {
+  opacity: 0.55;
+}
+.profile-award.locked .profile-award-medal {
+  filter: grayscale(1);
+  opacity: 0.6;
+}
+.profile-award-medal { font-size: 28px; }
+@keyframes medal-pop {
+  0% { transform: scale(0.4); }
+  60% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+.profile-award-name {
+  font-size: 12.5px;
+  font-weight: 700;
+}
+.profile-award-desc {
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.35;
+}
+
+.profile-weeks {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 6px;
+  align-items: end;
+  height: 110px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+.profile-week-col {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 3px;
+  height: 100%;
+}
+.profile-week-bar {
+  width: 100%;
+  min-height: 3px;
+  border-radius: 4px 4px 2px 2px;
+  background: color-mix(in srgb, var(--pc) 75%, transparent);
+}
+.profile-week-count {
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--text-tertiary);
+}
+.profile-empty {
+  padding: 40px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+@media (max-width: 720px) {
+  .profile-stats-grid, .profile-awards-grid { grid-template-columns: repeat(2, 1fr); }
+  .scrum-header-mid { order: 3; width: 100%; justify-content: flex-start; }
+}
