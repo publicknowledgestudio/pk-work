@@ -193,7 +193,8 @@ export const demo = {
   findDailyFocusContainingTask: async (_email, taskId) => {
     const out = []
     for (const [dateStr, f] of store.focus) {
-      if (f.taskIds.includes(taskId)) out.push(dateStr)
+      // Doc-shaped like db.js: { date, taskIds, timeBlocks }
+      if (f.taskIds.includes(taskId)) out.push({ date: dateStr, taskIds: [...f.taskIds], timeBlocks: [...f.timeBlocks] })
     }
     return out
   },

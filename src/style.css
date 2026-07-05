@@ -3407,8 +3407,28 @@ body {
 .ctx-cal-day.past {
   color: var(--text-tertiary);
 }
-.ctx-cal-day.weekend {
+.ctx-cal-day.weekend:not(.today) {
   color: var(--text);
+}
+.ctx-cal-unschedule {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  margin-top: 4px;
+  padding: 6px 8px;
+  border: none;
+  border-top: 1px solid var(--border);
+  border-radius: 0 0 6px 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ctx-cal-unschedule:hover {
+  color: var(--primary);
 }
 
 /* ===== Context Menu — Multi-select header ===== */

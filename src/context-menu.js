@@ -112,6 +112,9 @@ function showMenu(x, y, ctx) {
         <div class="ctx-cal-grid">
           ${week2.map((d) => `<button class="ctx-cal-day${d.isWeekend ? ' weekend' : ''}" data-action="schedule" data-date="${d.dateStr}">${d.day}</button>`).join('')}
         </div>
+        <button class="ctx-cal-unschedule" data-action="unschedule">
+          <i class="ph ph-calendar-minus"></i> ${isMulti ? `Unschedule ${tasks.length} Tasks` : 'Unschedule'}
+        </button>
       </div>
     </div>
     <div class="ctx-separator"></div>
@@ -266,6 +269,32 @@ function bindMenuActions(ctx, tasks) {
       clearSelection()
       await ctx.onSave?.()
     })
+  })
+
+  // Unschedule — remove tasks from every daily-focus day they're on (batch)
+  menuEl.querySelector('[data-action="unschedule"]')?.addEventListener('click', async () => {
+    closeMenu()
+    const email = ctx.currentUser?.email
+    if (!email) return
+
+    const cleanupByDate = new Map() // dateStr → { taskIds, timeBlocks }
+    for (const t of tasks) {
+      const existing = await findDailyFocusContainingTask(ctx.db, email, t.id)
+      for (const doc of existing) {
+        const entry = cleanupByDate.get(doc.date) || {
+          taskIds: [...(doc.taskIds || [])],
+          timeBlocks: [...(doc.timeBlocks || [])],
+        }
+        entry.taskIds = entry.taskIds.filter((id) => id !== t.id)
+        entry.timeBlocks = entry.timeBlocks.filter((b) => b.taskId !== t.id)
+        cleanupByDate.set(doc.date, entry)
+      }
+    }
+    for (const [date, entry] of cleanupByDate) {
+      await saveDailyFocus(ctx.db, email, date, entry.taskIds, entry.timeBlocks)
+    }
+    clearSelection()
+    await ctx.onSave?.()
   })
 
   // Duplicate (single only)
