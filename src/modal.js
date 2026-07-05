@@ -145,10 +145,66 @@ function updateClosedAtVisibility(status) {
     if (!input.value) {
       input.value = toLocalISODate(new Date())
     }
+    renderClosedAtCalendar()
   } else {
     row.classList.add('hidden')
   }
 }
+
+// ── "Completed on" two-week mini calendar ──
+// Same grid as the scrum room's Done ▾ popover: last week + this week, future
+// days disabled. Work marked done in standup usually finished yesterday or
+// the day before — two weeks covers it; "another date…" reveals the native
+// date input for the rare older case.
+const closedAtCalEl = document.getElementById('task-closed-at-cal')
+const closedAtOtherBtn = document.getElementById('task-closed-at-other')
+
+function renderClosedAtCalendar() {
+  const input = document.getElementById('task-closed-at')
+  const selected = input.value
+  const todayStr = toLocalISODate(new Date())
+  const now = new Date()
+  const dow = now.getDay()
+  const mondayOffset = (dow === 0 ? -6 : 1 - dow) - 7 // Monday of LAST week
+  const monday = new Date(now)
+  monday.setDate(now.getDate() + mondayOffset)
+  const days = []
+  for (let i = 0; i < 14; i++) {
+    const d = new Date(monday)
+    d.setDate(monday.getDate() + i)
+    const ds = toLocalISODate(d)
+    days.push({ dateStr: ds, day: d.getDate(), isToday: ds === todayStr, isFuture: ds > todayStr, isWeekend: d.getDay() === 0 || d.getDay() === 6 })
+  }
+
+  // A closedAt outside the two-week window can't be shown on the grid —
+  // fall back to the bare date input.
+  const inWindow = selected >= days[0].dateStr && selected <= todayStr
+  if (selected && !inWindow) { showOtherDate(); return }
+  closedAtCalEl.classList.remove('hidden')
+  closedAtOtherBtn.classList.remove('hidden')
+  input.classList.add('hidden')
+
+  const dayBtn = (d) => `<button type="button" class="ctx-cal-day${d.dateStr === selected ? ' today' : ''}${d.isWeekend ? ' weekend' : ''}" data-date="${d.dateStr}" ${d.isFuture ? 'disabled' : ''}>${d.day}</button>`
+  closedAtCalEl.innerHTML = `
+    <div class="ctx-cal-days"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span class="ctx-cal-we">S</span><span class="ctx-cal-we">S</span></div>
+    <div class="ctx-cal-grid">${days.slice(0, 7).map(dayBtn).join('')}</div>
+    <div class="ctx-cal-grid">${days.slice(7).map(dayBtn).join('')}</div>
+  `
+  closedAtCalEl.querySelectorAll('.ctx-cal-day:not([disabled])').forEach((b) => {
+    b.addEventListener('click', () => {
+      input.value = b.dataset.date
+      renderClosedAtCalendar()
+    })
+  })
+}
+
+function showOtherDate() {
+  closedAtCalEl.classList.add('hidden')
+  closedAtOtherBtn.classList.add('hidden')
+  document.getElementById('task-closed-at').classList.remove('hidden')
+}
+
+closedAtOtherBtn?.addEventListener('click', showOtherDate)
 
 // ===== Project Picker =====
 
@@ -318,10 +374,12 @@ export function openModal(task, ctx) {
   // Fill form
   document.getElementById('task-title').value = task?.title || ''
   document.getElementById('task-description').value = task?.description || ''
+  // closedAt must be populated before setStatusPill — a done status renders
+  // the "Completed on" calendar from this value.
+  document.getElementById('task-closed-at').value = formatDateInput(task?.closedAt)
   setStatusPill(task?.status || ctx.defaultStatus || 'todo')
   document.getElementById('task-priority').value = task?.priority || 'medium'
   document.getElementById('task-deadline').value = formatDateInput(task?.deadline)
-  document.getElementById('task-closed-at').value = formatDateInput(task?.closedAt)
   document.getElementById('task-notes').value = ''
 
   // Render existing notes

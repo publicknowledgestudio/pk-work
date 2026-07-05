@@ -42,7 +42,11 @@ const SCAFFOLD = `
     </div>
     <select id="task-priority"><option value="medium">medium</option></select>
     <input id="task-deadline" type="date">
-    <div id="task-closed-at-row" class="hidden"><input id="task-closed-at" type="date"></div>
+    <div id="task-closed-at-row" class="hidden">
+      <div id="task-closed-at-cal"></div>
+      <button id="task-closed-at-other"></button>
+      <input id="task-closed-at" type="date">
+    </div>
     <textarea id="task-notes"></textarea>
     <div id="task-notes-list"></div>
     <div id="task-assignees-inline"></div>

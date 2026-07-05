@@ -18,7 +18,8 @@
 // ───────────────────────────────────────────────────────────────────────────
 
 import { TEAM, STATUSES } from './config.js'
-import { updateTask } from './db.js'
+import { createTask, updateTask } from './db.js'
+import { attachMention } from './mention.js'
 import { toDate, toLocalISODate } from './utils/dates.js'
 
 const ROOM_ID = 'daily'
@@ -369,9 +370,12 @@ function personSection(member, tasks, ctx, { todayStr, yesterdayStr, now }) {
       <div class="scrum-person-list">
         ${active.map((t) => scrumRow(t, ctx, now)).join('')}
         ${recentDone.length ? `
-          <div class="scrum-done-divider">recently bloomed</div>
+          <div class="scrum-done-divider">Recently done</div>
           ${recentDone.map((t) => scrumRow(t, ctx, now)).join('')}
         ` : ''}
+        <div class="column-add-wrap scrum-add-wrap">
+          <input class="column-add-input scrum-add-input" data-assignee="${member.email}" placeholder="+ Add task (@ to tag)" type="text">
+        </div>
       </div>
     </div>
   `
@@ -461,6 +465,39 @@ function bindRowActions(container, tasks, ctx, todayStr) {
       const id = btn.closest('[data-id]').dataset.id
       const task = tasks.find((t) => t.id === id)
       if (task) toggleFlag(task)
+    })
+  })
+
+  // Inline add-task per person — assigns to that section's owner (same as the
+  // team board's column inputs), with @ mentions for project/extra people
+  container.querySelectorAll('.scrum-add-input').forEach((input) => {
+    const mention = attachMention(input, { projects: ctx.projects, clients: ctx.clients })
+    input.addEventListener('keydown', async (e) => {
+      if (e.key === 'Enter' && !mention.isOpen()) {
+        const title = input.value.trim()
+        if (!title) return
+        const mentionTags = mention.getTags()
+        const assignees = [...new Set([input.dataset.assignee, ...mentionTags.assignees])]
+        const projectId = mentionTags.projectId || ''
+        const clientId = projectId
+          ? (ctx.projects.find((p) => p.id === projectId)?.clientId || '')
+          : ''
+        input.disabled = true
+        await createTask(ctx.db, {
+          title, status: 'todo', assignees, clientId, projectId,
+          createdBy: cfg.user?.email || '',
+        })
+        input.value = ''
+        input.disabled = false
+        mention.reset()
+        await ctx.onSave?.()
+        // Re-render swapped the DOM — put focus back on this person's input
+        container.querySelector(`.scrum-add-input[data-assignee="${input.dataset.assignee}"]`)?.focus()
+      }
+      if (e.key === 'Escape' && !mention.isOpen()) {
+        input.value = ''
+        input.blur()
+      }
     })
   })
 
