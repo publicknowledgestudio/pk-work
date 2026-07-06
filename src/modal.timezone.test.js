@@ -49,6 +49,7 @@ const SCAFFOLD = `
     </div>
     <textarea id="task-notes"></textarea>
     <div id="task-notes-list"></div>
+    <div id="task-created-at" class="hidden"></div>
     <div id="task-assignees-inline"></div>
     <input id="task-client" type="hidden">
     <input id="task-project" type="hidden">
