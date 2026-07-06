@@ -211,6 +211,8 @@ function seedGhostParticipants() {
 // ── The scrum room view ──
 
 const RULES_COLLAPSE_KEY = 'pk-scrum-rules-collapsed'
+// Rules card hidden for now — flip to true to bring it back
+const SHOW_RULES = false
 
 export function renderScrum(container, tasks, ctx) {
   if (!cfg.user) return
@@ -245,6 +247,7 @@ export function renderScrum(container, tasks, ctx) {
       <div class="scrum-scroll" id="scrum-board">
         <div class="scrum-content">
 
+          ${SHOW_RULES ? `
           <div class="scrum-rules${rulesCollapsed ? ' collapsed' : ''}" id="scrum-rules">
             <button class="scrum-rules-header" id="scrum-rules-toggle">
               <span class="scrum-rules-title"><i class="ph-fill ph-list-checks"></i> Scrum Rules</span>
@@ -256,6 +259,7 @@ export function renderScrum(container, tasks, ctx) {
               <li><b>Don't read the board aloud.</b> It's on everyone's screen. Talking is for what the board can't say.</li>
             </ol>
           </div>
+          ` : ''}
 
           ${flagged.length ? discussionPanel(flagged, ctx) : ''}
 
@@ -270,7 +274,7 @@ export function renderScrum(container, tasks, ctx) {
 
   container.querySelector('#scrum-leave').addEventListener('click', () => leaveScrum())
 
-  container.querySelector('#scrum-rules-toggle').addEventListener('click', () => {
+  container.querySelector('#scrum-rules-toggle')?.addEventListener('click', () => {
     const collapsed = container.querySelector('#scrum-rules').classList.toggle('collapsed')
     localStorage.setItem(RULES_COLLAPSE_KEY, collapsed ? '1' : '0')
     container.querySelector('#scrum-rules-toggle i:last-child').className = `ph ph-caret-${collapsed ? 'down' : 'up'}`
@@ -407,7 +411,7 @@ function scrumRow(task, ctx, now) {
           <i class="ph${flag ? '-fill' : ''} ph-chat-circle-dots"></i>
         </button>
         <div class="scrum-quick-row">
-          ${['todo', 'in_progress', 'review'].map((s) => {
+          ${['backlog', 'todo', 'in_progress', 'review'].map((s) => {
             const st = STATUSES.find((x) => x.id === s)
             return `<button class="scrum-quick${task.status === s ? ' active' : ''}" data-set-status="${s}" style="--sc:${st.color}" title="${st.label}">${st.label}</button>`
           }).join('')}
