@@ -2267,6 +2267,12 @@ body {
   margin-left: auto;
 }
 
+.modal-created-at {
+  margin-top: 14px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
 /* ===== Forms ===== */
 .form-row {
   margin-bottom: 14px;

@@ -402,6 +402,14 @@ export function openModal(task, ctx) {
     notesList.innerHTML = ''
   }
 
+  // Created-on footnote (edit mode only)
+  const createdEl = document.getElementById('task-created-at')
+  const createdDate = task?.createdAt ? toDate(task.createdAt) : null
+  createdEl.classList.toggle('hidden', !createdDate)
+  createdEl.textContent = createdDate
+    ? `Created on ${createdDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`
+    : ''
+
   // Show modal (clear a still-running exit animation if reopened quickly)
   overlay.classList.remove('closing')
   overlay.classList.remove('hidden')
