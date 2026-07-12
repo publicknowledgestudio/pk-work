@@ -4,6 +4,10 @@
 // March 1 contributes 1 month in March, 2 by April, etc. — matching the legacy
 // monthsSinceJoin semantics so the migration is a no-op for current data.
 
+// Default medical-leave pool for a contract when `medicalLeaveTotal` is unset.
+// Matches the written leave policy ("up to 3 days total during your contract").
+export const DEFAULT_MEDICAL_TOTAL = 3
+
 function parseDate(s) {
   return new Date(s + 'T00:00:00')
 }
@@ -31,6 +35,20 @@ export function contractMonths(contract, asOf = new Date()) {
 export function accrualMonthsFromContracts(contracts, asOf = new Date()) {
   if (!Array.isArray(contracts) || contracts.length === 0) return 0
   return contracts.reduce((sum, c) => sum + contractMonths(c, asOf), 0)
+}
+
+// Total medical-leave pool across a person's contracts. Unlike personal leave
+// (which accrues 1/month), medical leave is a fixed pool for the contract term:
+// each started contract contributes its `medicalLeaveTotal` (default 3). Pools
+// sum across contracts; contracts that haven't started yet contribute 0.
+export function medicalTotalFromContracts(contracts, asOf = new Date()) {
+  if (!Array.isArray(contracts) || contracts.length === 0) return 0
+  return contracts.reduce((sum, c) => {
+    if (!c.startDate) return sum
+    if (parseDate(c.startDate) > asOf) return sum
+    const total = typeof c.medicalLeaveTotal === 'number' ? c.medicalLeaveTotal : DEFAULT_MEDICAL_TOTAL
+    return sum + total
+  }, 0)
 }
 
 // Earliest contract start for a person, used as the "joined" anchor in the UI.

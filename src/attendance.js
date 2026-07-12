@@ -1,7 +1,7 @@
 import { TEAM, ATTENDANCE_STATUSES, isAdmin, getAttendanceTeam } from './config.js'
 import { subscribeToLeaves, createLeave, cancelLeave, subscribeToHolidays, createHoliday, deleteHoliday, subscribeToContracts } from './db.js'
 import { openLeaveModal } from './leave-modal.js'
-import { accrualMonthsFromContracts, contractsForUser, earliestContractStart } from './utils/contracts.js'
+import { accrualMonthsFromContracts, contractsForUser, earliestContractStart, medicalTotalFromContracts } from './utils/contracts.js'
 import { toLocalISODate } from './utils/dates.js'
 
 let unsubLeaves = null
@@ -218,7 +218,7 @@ function renderBalanceCards(team, leaves, userEmail, admin) {
           </div>
           <div class="balance-row">
             <span class="balance-label">Medical</span>
-            ${renderBalanceNumbers(medical, true)}
+            ${renderBalanceNumbers(medical)}
           </div>
         </div>
       </div>
@@ -469,21 +469,20 @@ function getBalance(member, type, leaves) {
   const typeLeaves = leaves.filter((l) => l.userEmail === member.email && l.type === type)
 
   if (type === 'medical') {
-    // Medical: 1 per month, does NOT roll over. Only current month matters.
-    const now = new Date()
-    const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-    const usedThisMonth = typeLeaves
-      .filter((l) => l.startDate.startsWith(currentMonthStr))
-      .reduce((sum, l) => sum + (l.halfDay ? 0.5 : countWeekdays(l.startDate, l.endDate || l.startDate)), 0)
-    const totalUsed = typeLeaves.reduce((sum, l) => sum + (l.halfDay ? 0.5 : countWeekdays(l.startDate, l.endDate || l.startDate)), 0)
+    // Medical: a fixed pool per contract term (default 3), does NOT accrue
+    // monthly and does NOT roll over — the whole pool is available across the
+    // contract. Pools sum across a person's contracts.
+    const memberContracts = contractsForUser(allContracts, member.email)
+    const pool = medicalTotalFromContracts(memberContracts)
+    const used = typeLeaves.reduce((sum, l) => sum + (l.halfDay ? 0.5 : countWeekdays(l.startDate, l.endDate || l.startDate)), 0)
 
     return {
-      accrued: 1,
-      used: usedThisMonth,
-      totalUsed,
+      accrued: pool,
+      used,
+      totalUsed: used,
       overtimeCredit: 0,
-      unpaid: Math.max(0, usedThisMonth - 1),
-      available: Math.max(0, 1 - usedThisMonth),
+      unpaid: Math.max(0, used - pool),
+      available: Math.max(0, pool - used),
     }
   }
 

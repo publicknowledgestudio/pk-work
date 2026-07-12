@@ -1,6 +1,6 @@
 import { TEAM, isAdmin, getAttendanceTeam } from './config.js'
 import { createLeave, updateLeave } from './db.js'
-import { accrualMonthsFromContracts, contractsForUser } from './utils/contracts.js'
+import { accrualMonthsFromContracts, contractsForUser, medicalTotalFromContracts } from './utils/contracts.js'
 import { toLocalISODate } from './utils/dates.js'
 
 const overlay = document.getElementById('leave-modal')
@@ -77,13 +77,13 @@ saveBtn.addEventListener('click', async () => {
   let paidDays = days
   let unpaidDays = 0
 
-  if (selectedType === 'personal') {
-    const accrued = accrualForMember(targetEmail, targetMember)
-    if (accrued !== null) {
+  if (selectedType === 'personal' || selectedType === 'medical') {
+    const allowance = allowanceForMember(targetEmail, selectedType)
+    if (allowance !== null) {
       // When editing, exclude the current leave from "used" calculation
       const excludeId = editingLeaveId
-      const used = getUsedDays(targetEmail, 'personal', currentCtx.allLeaves || [], excludeId)
-      const available = Math.max(0, accrued - used)
+      const used = getUsedDays(targetEmail, selectedType, currentCtx.allLeaves || [], excludeId)
+      const available = Math.max(0, allowance - used)
       paidDays = Math.min(days, available)
       unpaidDays = days - paidDays
     }
@@ -194,15 +194,14 @@ function updateSummary() {
   const targetEmail = personRow.style.display !== 'none'
     ? personSelect.value
     : currentCtx?.currentUser?.email
-  const targetMember = TEAM.find((m) => m.email === targetEmail)
 
   let html = `<strong>${days} day${days !== 1 ? 's' : ''}</strong> of ${selectedType} leave`
 
-  if (selectedType === 'personal') {
-    const accrued = accrualForMember(targetEmail, targetMember)
-    if (accrued !== null) {
-      const used = getUsedDays(targetEmail, 'personal', currentCtx?.allLeaves || [], editingLeaveId)
-      const available = Math.max(0, accrued - used)
+  if (selectedType === 'personal' || selectedType === 'medical') {
+    const allowance = allowanceForMember(targetEmail, selectedType)
+    if (allowance !== null) {
+      const used = getUsedDays(targetEmail, selectedType, currentCtx?.allLeaves || [], editingLeaveId)
+      const available = Math.max(0, allowance - used)
       const paidDays = Math.min(days, available)
       const unpaidDays = days - paidDays
 
@@ -229,13 +228,16 @@ function countWeekdays(startDate, endDate) {
   return count
 }
 
-// Accrued months for a person, computed from their contracts in ctx.
-// Returns null when there are no contracts on file, so callers can skip
-// paid/unpaid splitting (no contract → no balance to enforce against).
-function accrualForMember(email, _member) {
+// Leave allowance for a person and leave type, computed from their contracts:
+// personal accrues 1/month, medical is a fixed per-contract pool. Returns null
+// when there are no contracts on file, so callers can skip paid/unpaid
+// splitting (no contract → no balance to enforce against).
+function allowanceForMember(email, type) {
   const memberContracts = contractsForUser(currentCtx?.allContracts || [], email)
   if (memberContracts.length === 0) return null
-  return accrualMonthsFromContracts(memberContracts)
+  return type === 'medical'
+    ? medicalTotalFromContracts(memberContracts)
+    : accrualMonthsFromContracts(memberContracts)
 }
 
 function getUsedDays(email, type, allLeaves, excludeId) {

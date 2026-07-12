@@ -150,6 +150,7 @@ function renderContractRow(c, admin) {
         <strong>${esc(end)}</strong>
         ${statusBadge}
       </div>
+      <div class="contract-row-terms">${esc(String(typeof c.medicalLeaveTotal === 'number' ? c.medicalLeaveTotal : 3))} medical ${(typeof c.medicalLeaveTotal === 'number' ? c.medicalLeaveTotal : 3) === 1 ? 'leave' : 'leaves'} · 1 personal/mo</div>
       ${c.notes ? `<div class="contract-row-notes">${esc(c.notes)}</div>` : ''}
       ${admin ? `
         <div class="contract-row-actions">
@@ -195,6 +196,10 @@ function openContractModal({ mode, contract = null, forEmail = null }) {
           <input type="date" id="contract-end" class="form-input" value="${esc(contract?.endDate || '')}">
         </div>
         <div class="form-row">
+          <label class="form-label">Medical leaves <span class="form-label-hint">(total for this contract term, not per month)</span></label>
+          <input type="number" id="contract-medical" class="form-input" min="0" step="1" value="${esc(String(typeof contract?.medicalLeaveTotal === 'number' ? contract.medicalLeaveTotal : 3))}">
+        </div>
+        <div class="form-row">
           <label class="form-label">Notes <span class="form-label-hint">(e.g. "Renewal — extended 5 days for unpaid balance")</span></label>
           <textarea id="contract-notes" class="form-textarea" rows="2" placeholder="Optional context...">${esc(contract?.notes || '')}</textarea>
         </div>
@@ -216,6 +221,8 @@ function openContractModal({ mode, contract = null, forEmail = null }) {
     const startDate = document.getElementById('contract-start').value
     const endDate = document.getElementById('contract-end').value || null
     const notes = document.getElementById('contract-notes').value.trim()
+    const medicalRaw = document.getElementById('contract-medical').value
+    const medicalLeaveTotal = medicalRaw === '' ? 3 : Math.max(0, Math.floor(Number(medicalRaw)))
 
     if (!userEmail || !startDate) {
       alert('Person and start date are required.')
@@ -225,15 +232,19 @@ function openContractModal({ mode, contract = null, forEmail = null }) {
       alert('End date must be on or after start date.')
       return
     }
+    if (!Number.isFinite(medicalLeaveTotal)) {
+      alert('Medical leaves must be a number.')
+      return
+    }
 
     const saveBtn = document.getElementById('contract-save-btn')
     saveBtn.disabled = true
     saveBtn.textContent = 'Saving...'
     try {
       if (isEdit) {
-        await updateContract(currentCtx.db, contract.id, { userEmail, startDate, endDate, notes })
+        await updateContract(currentCtx.db, contract.id, { userEmail, startDate, endDate, medicalLeaveTotal, notes })
       } else {
-        await createContract(currentCtx.db, { userEmail, startDate, endDate, notes, createdBy: currentCtx.currentUser.email })
+        await createContract(currentCtx.db, { userEmail, startDate, endDate, medicalLeaveTotal, notes, createdBy: currentCtx.currentUser.email })
       }
       closeContractModal()
     } catch (err) {

@@ -707,6 +707,7 @@ export async function createContract(db, data) {
     userEmail: data.userEmail,
     startDate: data.startDate,
     endDate: data.endDate || null,
+    medicalLeaveTotal: typeof data.medicalLeaveTotal === 'number' ? data.medicalLeaveTotal : 3,
     notes: data.notes || '',
     createdBy: data.createdBy || currentUserEmail,
     createdAt: serverTimestamp(),

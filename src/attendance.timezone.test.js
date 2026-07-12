@@ -36,6 +36,7 @@ vi.mock('./utils/contracts.js', () => ({
   accrualMonthsFromContracts: () => 0,
   contractsForUser: () => [],
   earliestContractStart: () => null,
+  medicalTotalFromContracts: () => 0,
 }))
 
 import { renderAttendance, cleanupAttendance } from './attendance.js'
