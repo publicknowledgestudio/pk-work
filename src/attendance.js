@@ -218,7 +218,7 @@ function renderBalanceCards(team, leaves, userEmail, admin) {
           </div>
           <div class="balance-row">
             <span class="balance-label">Medical</span>
-            ${renderBalanceNumbers(medical)}
+            ${renderBalanceNumbers(medical, 'medical')}
           </div>
         </div>
       </div>
@@ -226,16 +226,16 @@ function renderBalanceCards(team, leaves, userEmail, admin) {
   }).join('')
 }
 
-function renderBalanceNumbers(balance, isMonthly = false) {
+function renderBalanceNumbers(balance, kind = 'personal') {
+  const isMedical = kind === 'medical'
   const overLimit = balance.unpaid > 0
-  const periodSuffix = isMonthly ? ' this month' : ''
-  const accruedSuffix = isMonthly ? ' this month' : ' so far'
-  const usedLabel = isMonthly ? `used${periodSuffix}` : 'used or scheduled'
+  // Medical is a fixed pool for the contract term; personal accrues over time.
+  const accruedLabel = isMedical ? 'in contract period' : 'accrued so far'
 
   const colorClass = overLimit ? 'balance-num-over' : 'balance-num-ok'
   const lines = [
-    `<div class="balance-detail-line balance-detail-accrued"><strong>${balance.accrued}</strong> accrued${accruedSuffix}</div>`,
-    `<div class="balance-detail-line"><strong>${balance.used}</strong> ${usedLabel}</div>`,
+    `<div class="balance-detail-line balance-detail-accrued"><strong>${balance.accrued}</strong> ${accruedLabel}</div>`,
+    `<div class="balance-detail-line"><strong>${balance.used}</strong> used or scheduled</div>`,
   ]
   if (balance.overtimeCredit > 0) {
     lines.push(`<div class="balance-detail-line balance-detail-accrued"><strong>+${balance.overtimeCredit}</strong> overtime credit</div>`)
@@ -249,7 +249,7 @@ function renderBalanceNumbers(balance, isMonthly = false) {
     <div class="balance-nums ${colorClass}">
       ${lines.join('')}
       <div class="balance-result">
-        <div class="balance-headline"><strong>${balance.available}</strong> left${periodSuffix}</div>
+        <div class="balance-headline"><strong>${balance.available}</strong> left</div>
         ${unpaidLine}
       </div>
     </div>
