@@ -3,6 +3,13 @@
 // Months are counted inclusively from the start month: a contract that begins
 // March 1 contributes 1 month in March, 2 by April, etc. — matching the legacy
 // monthsSinceJoin semantics so the migration is a no-op for current data.
+//
+// Leave balances are scoped to the CURRENT contract term (see currentContract):
+// each contract is self-contained, so a fresh contract starts with a fresh
+// balance and leaves taken under a prior contract (or during a gap between
+// contracts) don't count against it.
+
+import { toLocalISODate } from './dates.js'
 
 // Default medical-leave pool for a contract when `medicalLeaveTotal` is unset.
 // Matches the written leave policy ("up to 3 days total during your contract").
@@ -30,27 +37,6 @@ export function contractMonths(contract, asOf = new Date()) {
   return Math.max(0, monthsBetweenInclusive(contract.startDate, cap))
 }
 
-// Total accrued months across all of a person's contracts. Gaps between
-// contracts don't accrue (correct for contractor model).
-export function accrualMonthsFromContracts(contracts, asOf = new Date()) {
-  if (!Array.isArray(contracts) || contracts.length === 0) return 0
-  return contracts.reduce((sum, c) => sum + contractMonths(c, asOf), 0)
-}
-
-// Total medical-leave pool across a person's contracts. Unlike personal leave
-// (which accrues 1/month), medical leave is a fixed pool for the contract term:
-// each started contract contributes its `medicalLeaveTotal` (default 3). Pools
-// sum across contracts; contracts that haven't started yet contribute 0.
-export function medicalTotalFromContracts(contracts, asOf = new Date()) {
-  if (!Array.isArray(contracts) || contracts.length === 0) return 0
-  return contracts.reduce((sum, c) => {
-    if (!c.startDate) return sum
-    if (parseDate(c.startDate) > asOf) return sum
-    const total = typeof c.medicalLeaveTotal === 'number' ? c.medicalLeaveTotal : DEFAULT_MEDICAL_TOTAL
-    return sum + total
-  }, 0)
-}
-
 // Earliest contract start for a person, used as the "joined" anchor in the UI.
 // Returns YYYY-MM-DD or null.
 export function earliestContractStart(contracts) {
@@ -66,4 +52,34 @@ export function earliestContractStart(contracts) {
 export function contractsForUser(contracts, userEmail) {
   if (!Array.isArray(contracts)) return []
   return contracts.filter((c) => c.userEmail === userEmail)
+}
+
+// The contract a person's balance should be computed against as of `asOf`:
+// the active contract (started, not yet ended) with the latest start; or, if
+// none is active (e.g. between contracts), the most recent started contract.
+// Returns null when the person has no started contract on file.
+export function currentContract(contracts, asOf = new Date()) {
+  if (!Array.isArray(contracts) || contracts.length === 0) return null
+  const asOfISO = toLocalISODate(asOf)
+  const started = contracts.filter((c) => c.startDate && c.startDate <= asOfISO)
+  if (started.length === 0) return null
+  const active = started.filter((c) => !c.endDate || c.endDate >= asOfISO)
+  const candidates = active.length > 0 ? active : started
+  return candidates.reduce((best, c) => (!best || c.startDate > best.startDate ? c : best), null)
+}
+
+// Medical-leave pool for a single contract (its `medicalLeaveTotal`, or the
+// default). Returns 0 for a null contract.
+export function medicalPoolForContract(contract) {
+  if (!contract) return 0
+  return typeof contract.medicalLeaveTotal === 'number' ? contract.medicalLeaveTotal : DEFAULT_MEDICAL_TOTAL
+}
+
+// Whether a leave (keyed by its YYYY-MM-DD start date) falls within a
+// contract's term. A null contract contains nothing.
+export function isWithinContractTerm(dateStr, contract) {
+  if (!contract || !dateStr) return false
+  if (dateStr < contract.startDate) return false
+  if (contract.endDate && dateStr > contract.endDate) return false
+  return true
 }

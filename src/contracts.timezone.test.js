@@ -30,9 +30,10 @@ vi.mock('./db.js', () => ({
   deleteContract: vi.fn(),
 }))
 vi.mock('./utils/contracts.js', () => ({
-  accrualMonthsFromContracts: () => 0,
   contractsForUser: (all) => all,
-  earliestContractStart: () => null,
+  currentContract: () => null,
+  contractMonths: () => 0,
+  isWithinContractTerm: () => false,
 }))
 
 import { renderContracts, cleanupContracts } from './contracts.js'

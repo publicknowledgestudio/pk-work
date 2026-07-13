@@ -19,8 +19,11 @@ vi.mock('./config.js', () => ({
 }))
 vi.mock('./db.js', () => ({ createLeave: vi.fn(), updateLeave: vi.fn() }))
 vi.mock('./utils/contracts.js', () => ({
-  accrualMonthsFromContracts: () => 0,
   contractsForUser: () => [],
+  currentContract: () => null,
+  medicalPoolForContract: () => 0,
+  isWithinContractTerm: () => false,
+  contractMonths: () => 0,
 }))
 
 const SCAFFOLD = `

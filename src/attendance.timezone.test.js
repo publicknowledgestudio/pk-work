@@ -33,10 +33,12 @@ vi.mock('./db.js', () => ({
 }))
 vi.mock('./leave-modal.js', () => ({ openLeaveModal: vi.fn() }))
 vi.mock('./utils/contracts.js', () => ({
-  accrualMonthsFromContracts: () => 0,
   contractsForUser: () => [],
   earliestContractStart: () => null,
-  medicalTotalFromContracts: () => 0,
+  currentContract: () => null,
+  medicalPoolForContract: () => 0,
+  isWithinContractTerm: () => false,
+  contractMonths: () => 0,
 }))
 
 import { renderAttendance, cleanupAttendance } from './attendance.js'

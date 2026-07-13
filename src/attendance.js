@@ -1,7 +1,7 @@
 import { TEAM, ATTENDANCE_STATUSES, isAdmin, getAttendanceTeam } from './config.js'
 import { subscribeToLeaves, createLeave, cancelLeave, subscribeToHolidays, createHoliday, deleteHoliday, subscribeToContracts } from './db.js'
 import { openLeaveModal } from './leave-modal.js'
-import { accrualMonthsFromContracts, contractsForUser, earliestContractStart, medicalTotalFromContracts } from './utils/contracts.js'
+import { contractsForUser, earliestContractStart, currentContract, medicalPoolForContract, isWithinContractTerm, contractMonths } from './utils/contracts.js'
 import { toLocalISODate } from './utils/dates.js'
 
 let unsubLeaves = null
@@ -468,13 +468,18 @@ function renderLeaveList(leaves, userEmail, admin, ctx) {
 function getBalance(member, type, leaves) {
   const typeLeaves = leaves.filter((l) => l.userEmail === member.email && l.type === type)
 
+  // Balances are scoped to the person's current contract term: each contract
+  // is self-contained, so a fresh contract starts fresh and leaves taken under
+  // a prior contract (or in a gap between contracts) don't count against it.
+  const memberContracts = contractsForUser(allContracts, member.email)
+  const contract = currentContract(memberContracts)
+  const inTerm = (l) => isWithinContractTerm(l.startDate, contract)
+
   if (type === 'medical') {
-    // Medical: a fixed pool per contract term (default 3), does NOT accrue
-    // monthly and does NOT roll over — the whole pool is available across the
-    // contract. Pools sum across a person's contracts.
-    const memberContracts = contractsForUser(allContracts, member.email)
-    const pool = medicalTotalFromContracts(memberContracts)
-    const used = typeLeaves.reduce((sum, l) => sum + (l.halfDay ? 0.5 : countWeekdays(l.startDate, l.endDate || l.startDate)), 0)
+    // Medical: a fixed pool for the contract term (default 3), does NOT accrue
+    // monthly and does NOT roll over — including across contracts.
+    const pool = medicalPoolForContract(contract)
+    const used = typeLeaves.filter(inTerm).reduce((sum, l) => sum + (l.halfDay ? 0.5 : countWeekdays(l.startDate, l.endDate || l.startDate)), 0)
 
     return {
       accrued: pool,
@@ -486,18 +491,15 @@ function getBalance(member, type, leaves) {
     }
   }
 
-  // Personal: 1 per month, rolls over. Sum across all of this person's
-  // contracts; months in gaps between contracts don't accrue. People with
-  // no contracts on file accrue 0 — admin must add a contract on the
-  // Contracts page.
-  const memberContracts = contractsForUser(allContracts, member.email)
-  const accrued = accrualMonthsFromContracts(memberContracts)
-  const used = typeLeaves.reduce((sum, l) => sum + (l.halfDay ? 0.5 : countWeekdays(l.startDate, l.endDate || l.startDate)), 0)
+  // Personal: 1 per month, rolls over within the contract term. Accrues from
+  // the current contract only. People with no contract on file accrue 0 —
+  // admin must add a contract on the Contracts page.
+  const accrued = contract ? contractMonths(contract) : 0
+  const used = typeLeaves.filter(inTerm).reduce((sum, l) => sum + (l.halfDay ? 0.5 : countWeekdays(l.startDate, l.endDate || l.startDate)), 0)
 
-  // Overtime credits against personal leave balance
-  let overtimeCredit = 0
-  const overtimeLeaves = leaves.filter((l) => l.userEmail === member.email && l.type === 'overtime')
-  overtimeCredit = overtimeLeaves.reduce((sum, l) => sum + (l.halfDay ? 0.5 : 1), 0)
+  // Overtime credits against personal leave balance (within the same term)
+  const overtimeLeaves = leaves.filter((l) => l.userEmail === member.email && l.type === 'overtime' && inTerm(l))
+  const overtimeCredit = overtimeLeaves.reduce((sum, l) => sum + (l.halfDay ? 0.5 : 1), 0)
 
   return {
     accrued,

@@ -1,6 +1,6 @@
 import { TEAM, isAdmin, getAttendanceTeam } from './config.js'
 import { createLeave, updateLeave } from './db.js'
-import { accrualMonthsFromContracts, contractsForUser, medicalTotalFromContracts } from './utils/contracts.js'
+import { contractsForUser, currentContract, medicalPoolForContract, isWithinContractTerm, contractMonths } from './utils/contracts.js'
 import { toLocalISODate } from './utils/dates.js'
 
 const overlay = document.getElementById('leave-modal')
@@ -228,20 +228,26 @@ function countWeekdays(startDate, endDate) {
   return count
 }
 
-// Leave allowance for a person and leave type, computed from their contracts:
-// personal accrues 1/month, medical is a fixed per-contract pool. Returns null
-// when there are no contracts on file, so callers can skip paid/unpaid
-// splitting (no contract → no balance to enforce against).
-function allowanceForMember(email, type) {
-  const memberContracts = contractsForUser(currentCtx?.allContracts || [], email)
-  if (memberContracts.length === 0) return null
-  return type === 'medical'
-    ? medicalTotalFromContracts(memberContracts)
-    : accrualMonthsFromContracts(memberContracts)
+// The contract a person's balance is currently computed against.
+function currentContractFor(email) {
+  return currentContract(contractsForUser(currentCtx?.allContracts || [], email))
 }
 
+// Leave allowance for a person and leave type, scoped to their current
+// contract term: personal accrues 1/month of that contract, medical is that
+// contract's fixed pool. Returns null when there's no contract on file, so
+// callers can skip paid/unpaid splitting (no contract → no balance to enforce).
+function allowanceForMember(email, type) {
+  const contract = currentContractFor(email)
+  if (!contract) return null
+  return type === 'medical' ? medicalPoolForContract(contract) : contractMonths(contract)
+}
+
+// Days of `type` already used within the current contract term (leaves taken
+// under a prior contract or in a gap don't count).
 function getUsedDays(email, type, allLeaves, excludeId) {
+  const contract = currentContractFor(email)
   return allLeaves
-    .filter((l) => l.userEmail === email && l.type === type && l.status === 'approved' && l.id !== excludeId)
+    .filter((l) => l.userEmail === email && l.type === type && l.status === 'approved' && l.id !== excludeId && isWithinContractTerm(l.startDate, contract))
     .reduce((sum, l) => sum + (l.halfDay ? 0.5 : countWeekdays(l.startDate, l.endDate || l.startDate)), 0)
 }

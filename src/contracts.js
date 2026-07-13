@@ -7,9 +7,10 @@ import {
   deleteContract,
 } from './db.js'
 import {
-  accrualMonthsFromContracts,
   contractsForUser,
-  earliestContractStart,
+  currentContract,
+  contractMonths,
+  isWithinContractTerm,
 } from './utils/contracts.js'
 import { toLocalISODate } from './utils/dates.js'
 
@@ -80,9 +81,11 @@ function renderList() {
       .slice()
       .sort((a, b) => (b.startDate || '').localeCompare(a.startDate || ''))
 
-    const accrued = memberContracts.length > 0 ? accrualMonthsFromContracts(memberContracts) : 0
+    // Scoped to the current contract term — matches the Leaves balance cards.
+    const contract = currentContract(memberContracts)
+    const accrued = contract ? contractMonths(contract) : 0
     const personalUsed = approvedLeaves
-      .filter((l) => l.userEmail === member.email && l.type === 'personal')
+      .filter((l) => l.userEmail === member.email && l.type === 'personal' && isWithinContractTerm(l.startDate, contract))
       .reduce((sum, l) => sum + (l.halfDay ? 0.5 : countWeekdays(l.startDate, l.endDate || l.startDate)), 0)
     const unpaid = Math.max(0, personalUsed - accrued)
 
