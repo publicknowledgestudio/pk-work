@@ -3342,6 +3342,18 @@ body {
   gap: 2px;
   flex-shrink: 0;
 }
+/* Persistent "opens detail" affordance on clickable project rows. */
+.manage-row-chevron {
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+  font-size: 14px;
+  opacity: 0.5;
+  transition: opacity 0.15s, transform 0.15s;
+}
+.manage-row.project-row:hover .manage-row-chevron {
+  opacity: 1;
+  transform: translateX(2px);
+}
 
 .manage-empty-row {
   padding: 14px;

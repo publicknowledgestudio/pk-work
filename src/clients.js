@@ -255,7 +255,7 @@ function renderClientDetail(pane, client) {
       <div class="manage-detail-actions">
         <button class="btn-ghost" id="archive-client-btn"><i class="ph ${client.archived ? 'ph-arrow-counter-clockwise' : 'ph-archive'}"></i> ${client.archived ? 'Unarchive' : 'Archive'}</button>
         <button class="btn-ghost" id="edit-client-btn"><i class="ph ph-pencil-simple"></i> Edit</button>
-        <button class="btn-ghost danger" id="delete-client-btn"><i class="ph ph-trash"></i></button>
+        <button class="btn-ghost danger" id="delete-client-btn" title="Delete client" aria-label="Delete client"><i class="ph ph-trash"></i></button>
       </div>
     </div>
 
@@ -340,9 +340,10 @@ function renderProjectsList(projects, client) {
           </span>
         </div>
         <div class="manage-row-actions">
-          <button class="btn-ghost project-edit" data-id="${p.id}"><i class="ph ph-pencil-simple"></i></button>
-          <button class="btn-ghost danger project-delete" data-id="${p.id}" data-name="${escHtml(p.name)}"><i class="ph ph-trash"></i></button>
+          <button class="btn-ghost project-edit" data-id="${p.id}" title="Edit project" aria-label="Edit project"><i class="ph ph-pencil-simple"></i></button>
+          <button class="btn-ghost danger project-delete" data-id="${p.id}" data-name="${escHtml(p.name)}" title="Delete project" aria-label="Delete project"><i class="ph ph-trash"></i></button>
         </div>
+        <i class="ph ph-caret-right manage-row-chevron" aria-hidden="true"></i>
       </div>
     `
   }).join('')
@@ -398,7 +399,7 @@ function renderClientUsersList(users) {
           <span class="manage-row-meta">${escHtml(cu.email)}${inviter ? ' · Invited by ' + escHtml(inviter.name) : ''}</span>
         </div>
         <div class="manage-row-actions">
-          <button class="btn-ghost danger cu-delete" data-email="${escHtml(cu.email)}" data-name="${escHtml(cu.name)}"><i class="ph ph-trash"></i></button>
+          <button class="btn-ghost danger cu-delete" data-email="${escHtml(cu.email)}" data-name="${escHtml(cu.name)}" title="Remove access" aria-label="Remove access"><i class="ph ph-trash"></i></button>
         </div>
       </div>
     `
@@ -552,13 +553,16 @@ function openProjectForm(existing, client) {
   const name = existing?.name || ''
   const slack = existing?.slackChannelId || ''
   const rate = existing?.hourlyRate ?? ''
+  const inheritHint = client?.defaultHourlyRate
+    ? `Inherits ${client.currency || 'INR'} ${client.defaultHourlyRate}`
+    : 'No client rate set'
 
   form.innerHTML = `
     <input type="text" id="pf-name" class="form-input" placeholder="Project name" value="${escHtml(name)}">
     <div class="rate-row">
       <div class="rate-field">
         <label class="form-label-sm">Hourly rate (optional)</label>
-        <input type="number" id="pf-rate" class="form-input" placeholder="Inherits ${client?.defaultHourlyRate || 0}" min="0" step="1" value="${rate}">
+        <input type="number" id="pf-rate" class="form-input" placeholder="${escHtml(inheritHint)}" min="0" step="1" value="${rate}">
       </div>
     </div>
     <div class="rate-field" style="width:100%">
@@ -885,7 +889,7 @@ function renderProjectActivityTab(container, project) {
 function formatDateClients(ts) {
   if (!ts) return ''
   const d = ts.toDate ? ts.toDate() : ts.seconds ? new Date(ts.seconds * 1000) : new Date(ts)
-  return d.toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
 function escHtml(str) {
