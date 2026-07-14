@@ -11,6 +11,7 @@ import {
   currentContract,
   contractMonths,
   isWithinContractTerm,
+  medicalPoolForContract,
 } from './utils/contracts.js'
 import { toLocalISODate } from './utils/dates.js'
 
@@ -84,10 +85,21 @@ function renderList() {
     // Scoped to the current contract term — matches the Leaves balance cards.
     const contract = currentContract(memberContracts)
     const accrued = contract ? contractMonths(contract) : 0
-    const personalUsed = approvedLeaves
-      .filter((l) => l.userEmail === member.email && l.type === 'personal' && isWithinContractTerm(l.startDate, contract))
+    const usedDays = (type) => approvedLeaves
+      .filter((l) => l.userEmail === member.email && l.type === type && isWithinContractTerm(l.startDate, contract))
       .reduce((sum, l) => sum + (l.halfDay ? 0.5 : countWeekdays(l.startDate, l.endDate || l.startDate)), 0)
+    const personalUsed = usedDays('personal')
+    const medicalUsed = usedDays('medical')
+    const medicalPool = medicalPoolForContract(contract)
     const unpaid = Math.max(0, personalUsed - accrued)
+    const medicalUnpaid = Math.max(0, medicalUsed - medicalPool)
+
+    const metaHtml = contract
+      ? `Personal <strong>${personalUsed}</strong> / ${accrued} used`
+        + (unpaid > 0 ? ` · <span class="contracts-unpaid">${unpaid} unpaid</span>` : '')
+        + ` &nbsp;•&nbsp; Medical <strong>${medicalUsed}</strong> / ${medicalPool} used`
+        + (medicalUnpaid > 0 ? ` · <span class="contracts-unpaid">${medicalUnpaid} unpaid</span>` : '')
+      : 'No active contract'
 
     const memberObj = TEAM.find((m) => m.email === member.email)
     const avatarHtml = memberObj?.photoURL
@@ -104,7 +116,7 @@ function renderList() {
           ${avatarHtml}
           <div class="contracts-card-info">
             <span class="contracts-card-name">${esc(member.name)}</span>
-            <span class="contracts-card-meta">${accrued} mo accrued · ${personalUsed} used${unpaid > 0 ? ` · <span class="contracts-unpaid">${unpaid} unpaid</span>` : ''}</span>
+            <span class="contracts-card-meta">${metaHtml}</span>
           </div>
           ${admin ? `<button class="btn-ghost btn-sm" data-action="add-for" data-email="${esc(member.email)}"><i class="ph ph-plus"></i> Contract</button>` : ''}
         </div>
@@ -134,9 +146,11 @@ function renderList() {
 }
 
 function renderContractRow(c, admin) {
-  const start = c.startDate || '?'
-  const end = c.endDate || 'ongoing'
+  const start = c.startDate ? formatContractDate(c.startDate) : '?'
+  const end = c.endDate ? formatContractDate(c.endDate) : 'ongoing'
   const isOngoing = !c.endDate
+  // Auto-seed provenance is internal migration cruft, not a user-facing note.
+  const showNote = c.notes && !/^Auto-seeded/i.test(c.notes.trim())
   const today = toLocalISODate(new Date()) // local day — endDate keys are local
   const ended = c.endDate && c.endDate < today
   const statusBadge = isOngoing
@@ -154,11 +168,11 @@ function renderContractRow(c, admin) {
         ${statusBadge}
       </div>
       <div class="contract-row-terms">${esc(String(typeof c.medicalLeaveTotal === 'number' ? c.medicalLeaveTotal : 3))} medical ${(typeof c.medicalLeaveTotal === 'number' ? c.medicalLeaveTotal : 3) === 1 ? 'leave' : 'leaves'} · 1 personal/mo</div>
-      ${c.notes ? `<div class="contract-row-notes">${esc(c.notes)}</div>` : ''}
+      ${showNote ? `<div class="contract-row-notes">${esc(c.notes)}</div>` : ''}
       ${admin ? `
         <div class="contract-row-actions">
-          <button class="btn-ghost btn-xs" data-action="edit-contract" data-id="${esc(c.id)}"><i class="ph ph-pencil-simple"></i></button>
-          <button class="btn-ghost btn-xs" data-action="delete-contract" data-id="${esc(c.id)}"><i class="ph ph-trash"></i></button>
+          <button class="btn-ghost btn-xs" data-action="edit-contract" data-id="${esc(c.id)}" title="Edit contract" aria-label="Edit contract"><i class="ph ph-pencil-simple"></i></button>
+          <button class="btn-ghost btn-xs" data-action="delete-contract" data-id="${esc(c.id)}" title="Delete contract" aria-label="Delete contract"><i class="ph ph-trash"></i></button>
         </div>
       ` : ''}
     </div>
@@ -262,6 +276,12 @@ function openContractModal({ mode, contract = null, forEmail = null }) {
 function closeContractModal() {
   const existing = document.getElementById('contract-modal')
   if (existing) existing.remove()
+}
+
+// "2026-03-01" → "1 Mar 2026" (parsed as a local day to avoid UTC rollback).
+function formatContractDate(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00')
+  return d.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
 function countWeekdays(startDate, endDate) {

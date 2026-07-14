@@ -34,6 +34,7 @@ vi.mock('./utils/contracts.js', () => ({
   currentContract: () => null,
   contractMonths: () => 0,
   isWithinContractTerm: () => false,
+  medicalPoolForContract: () => 0,
 }))
 
 import { renderContracts, cleanupContracts } from './contracts.js'
@@ -66,5 +67,15 @@ describe('Contracts view — "Ended" badge across the UTC day boundary (IST)', (
     const ended = container.querySelector('.contract-status-ended')
     expect(ended).toBeTruthy()
     expect(ended.textContent).toBe('Ended')
+  })
+
+  it('renders humanized dates, not raw ISO strings', () => {
+    renderContracts(container, { db: {}, currentUser: { email: member.email } })
+    const dates = container.querySelector('.contract-row-dates').textContent
+    // Contract is 2026-01-01 → 2026-06-18 in the db mock; en-US month-first,
+    // matching the Leaves page convention.
+    expect(dates).toContain('Jan 1, 2026')
+    expect(dates).toContain('Jun 18, 2026')
+    expect(dates).not.toContain('2026-01-01')
   })
 })
