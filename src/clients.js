@@ -889,7 +889,7 @@ function renderProjectActivityTab(container, project) {
 function formatDateClients(ts) {
   if (!ts) return ''
   const d = ts.toDate ? ts.toDate() : ts.seconds ? new Date(ts.seconds * 1000) : new Date(ts)
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  return d.toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
 function escHtml(str) {

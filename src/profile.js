@@ -30,7 +30,7 @@ export function renderProfile(container, tasks, ctx, email) {
         </div>
         <h1 class="profile-name">${esc(member.name)}</h1>
         <div class="profile-subtitle">${esc(title(s))}</div>
-        <div class="profile-since">${s.firstSeen ? `In the studio since ${s.firstSeen.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}` : 'Just getting started'}</div>
+        <div class="profile-since">${s.firstSeen ? `In the studio since ${s.firstSeen.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}` : 'Just getting started'}</div>
       </div>
 
       <div class="profile-stats-grid">
@@ -149,7 +149,7 @@ function computeStats(tasks, email, ctx) {
     const start = new Date(monday); start.setDate(monday.getDate() - i * 7)
     const end = new Date(start); end.setDate(start.getDate() + 7)
     const count = done.filter((t) => { const d = toDate(t.closedAt); return d && d >= start && d < end }).length
-    weeklyCounts.push({ count, label: `Week of ${start.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}` })
+    weeklyCounts.push({ count, label: `Week of ${start.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}` })
   }
 
   // Special-moment detection for awards

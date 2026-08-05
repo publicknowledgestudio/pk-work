@@ -281,7 +281,7 @@ function closeContractModal() {
 // "2026-03-01" → "1 Mar 2026" (parsed as a local day to avoid UTC rollback).
 function formatContractDate(dateStr) {
   const d = new Date(dateStr + 'T00:00:00')
-  return d.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })
+  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
 function countWeekdays(startDate, endDate) {

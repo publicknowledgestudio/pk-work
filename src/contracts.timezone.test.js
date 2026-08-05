@@ -72,10 +72,10 @@ describe('Contracts view — "Ended" badge across the UTC day boundary (IST)', (
   it('renders humanized dates, not raw ISO strings', () => {
     renderContracts(container, { db: {}, currentUser: { email: member.email } })
     const dates = container.querySelector('.contract-row-dates').textContent
-    // Contract is 2026-01-01 → 2026-06-18 in the db mock; en-US month-first,
-    // matching the Leaves page convention.
-    expect(dates).toContain('Jan 1, 2026')
-    expect(dates).toContain('Jun 18, 2026')
+    // Contract is 2026-01-01 → 2026-06-18 in the db mock; en-IN day-first,
+    // standardized across the app.
+    expect(dates).toContain('1 Jan 2026')
+    expect(dates).toContain('18 Jun 2026')
     expect(dates).not.toContain('2026-01-01')
   })
 })

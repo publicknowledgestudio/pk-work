@@ -773,7 +773,7 @@ function shortDay(closedAt) {
   if (ds === today) return 'today'
   const y = new Date(); y.setDate(y.getDate() - 1)
   if (ds === toLocalISODate(y)) return 'yday'
-  return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
+  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
 }
 
 function esc(s) {

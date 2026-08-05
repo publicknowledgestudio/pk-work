@@ -259,7 +259,7 @@ function renderBalanceNumbers(balance, kind = 'personal') {
 function renderMonthGrid(team, leaves) {
   const [year, month] = currentMonth.split('-').map(Number)
   const daysInMonth = new Date(year, month, 0).getDate()
-  const label = new Date(year, month - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+  const label = new Date(year, month - 1).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })
 
   document.getElementById('att-month-label').textContent = label
 
@@ -267,7 +267,7 @@ function renderMonthGrid(team, leaves) {
   for (let d = 1; d <= daysInMonth; d++) {
     const date = new Date(year, month - 1, d)
     const isWeekend = date.getDay() === 0 || date.getDay() === 6
-    const dayLabel = date.toLocaleDateString('en-US', { weekday: 'narrow' })
+    const dayLabel = date.toLocaleDateString('en-IN', { weekday: 'narrow' })
     const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`
     const holiday = allHolidays.find((h) => h.date === dateStr)
     const isOff = isWeekend || holiday
@@ -526,7 +526,7 @@ function countWeekdays(startDate, endDate) {
 
 function formatDate(dateStr) {
   const d = new Date(dateStr + 'T00:00:00')
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  return d.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })
 }
 
 function esc(str) {
@@ -563,7 +563,7 @@ function showCellPopover(cell, email, date, existingLeave) {
   popover.className = 'att-popover'
   popover.addEventListener('click', (e) => e.stopPropagation())
 
-  const dateLabel = new Date(date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+  const dateLabel = new Date(date + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'short', month: 'short', day: 'numeric' })
 
   if (existingLeave) {
     // Show leave details with cancel option
