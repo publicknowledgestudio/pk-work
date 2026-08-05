@@ -36,7 +36,8 @@ export const TEAM = [
   { email: 'rakesh@publicknowledge.co', name: 'Rakesh', color: '#d97706', role: 'member' },
   // Only on one project and doesn't use this tool — restore if that changes
   // { email: 'saurabh@publicknowledge.co', name: 'Saurabh', color: '#db2777', role: 'member' },
-  { email: 'ananya@publicknowledge.co', name: 'Ananya', color: '#65a30d', role: 'member' },
+  // Removed from the tool — restore if she rejoins
+  // { email: 'ananya@publicknowledge.co', name: 'Ananya', color: '#65a30d', role: 'member' },
 ]
 
 // Task statuses and their display config

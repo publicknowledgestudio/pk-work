@@ -21,7 +21,7 @@ const INSTRUCTIONS = `PK Work is the task management system for Public Knowledge
 
 Tool choice: use pkwork_status for any "what's pending / what's going on" question (scope = client name, person first-name, or "today"; omit for studio-wide) and show actual task lists, not just counts. Use pkwork_search first whenever something is referenced by name and you need its id. Use pkwork_task_add / pkwork_task_set for changes. pkwork_raw is the escape hatch for anything else, including leaves.
 
-Team emails (for assignee and leaves fields): gyan@, charu@, sharang@, anandu@, mohit@, rakesh@, ananya@ — all @publicknowledge.co.
+Team emails (for assignee and leaves fields): gyan@, charu@, sharang@, anandu@, mohit@, rakesh@ — all @publicknowledge.co.
 
 Conventions:
 - Statuses: backlog, todo, in_progress, review, done. Priorities: low, medium, high, urgent. Deadlines are ISO dates (2026-06-20).
