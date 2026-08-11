@@ -35,6 +35,7 @@ export const TEAM = [
   // { email: 'anandu@publicknowledge.co', name: 'Anandu', color: '#ea580c', role: 'member' },
   { email: 'mohit@publicknowledge.co', name: 'Mohit', color: '#059669', role: 'member' },
   { email: 'rakesh@publicknowledge.co', name: 'Rakesh', color: '#d97706', role: 'member' },
+  { email: 'devika@publicknowledge.co', name: 'Devika', color: '#e11d48', role: 'member' },
   // Only on one project and doesn't use this tool — restore if that changes
   // { email: 'saurabh@publicknowledge.co', name: 'Saurabh', color: '#db2777', role: 'member' },
   // Removed from the tool — restore if she rejoins
