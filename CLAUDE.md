@@ -2,10 +2,13 @@
 
 ## Quick Overview
 
-This is a task management + scrum automation system for the Public Knowledge Studio team. It has a web app (Vite + vanilla JS), a Firebase backend (Firestore + Cloud Functions), and two Slack integrations:
+This is a task management + scrum automation system for the Public Knowledge Studio team. It has a web app (Vite + vanilla JS), a Firebase backend (Firestore + Cloud Functions), and Slack integration:
 
-1. **Scrumpy** — incoming webhook bot for posting formatted scrum summaries to #daily-scrum
-2. **Asty** — AI studio manager (OpenClaw agent) that manages tasks, calendar, memory, and proactive routines via Slack
+1. **Asty** — AI studio manager (OpenClaw agent) that manages tasks, calendar, memory, and proactive routines via Slack
+2. **Firestore triggers** — post task and leave events to Slack via `SLACK_BOT_TOKEN`
+
+External agents get in through the **MCP bridge** or the REST API — see
+[docs/AGENT_ACCESS.md](docs/AGENT_ACCESS.md).
 
 ## Architecture
 
@@ -15,10 +18,11 @@ Frontend (Vite)  →  Firebase Hosting (work.publicknowledge.co)
                  Firestore (tasks, standups, clients, projects, notes)
                      ↑
 Cloud Functions  →  api (REST API for CRUD, authenticated via x-api-key)
-                 →  slackWebhook (posts to Slack via incoming webhook)
+                 →  mcp (MCP server for external agents, bearer auth)
+                 →  onTaskWritten / onLeaveWritten (Firestore triggers → Slack + Asty)
                      ↑
-Slack            ← Scrumpy bot (incoming webhook, posts formatted summaries)
-                 ← Asty / OpenClaw (socket mode, reads/writes via tools + Slack MCP)
+Slack            ← Asty / OpenClaw (socket mode, reads/writes via tools + Slack MCP)
+                 ← Firestore triggers (post via SLACK_BOT_TOKEN)
 
 OpenClaw Gateway → Runs on an Oracle Cloud free-tier VM
                  → Plugins: openclaw-pkwork (5 tools), openclaw-mem0 (long-term memory)
@@ -32,9 +36,15 @@ OpenClaw Gateway → Runs on an Oracle Cloud free-tier VM
 - **Web app:** https://work.publicknowledge.co (custom domain) / https://workdotpk-a06dc.web.app
 - **Firebase project:** workdotpk-a06dc
 - **API endpoint:** https://us-central1-workdotpk-a06dc.cloudfunctions.net/api
-- **Slack webhook endpoint:** https://us-central1-workdotpk-a06dc.cloudfunctions.net/slackWebhook
-- **Slack channels:** #daily-scrum, #leaves, #references (C08UCQXH7D0), #tell-asty (Asty's task inbox). Each client also has its own channel — see `slackChannelId` on the client doc.
-- **Slack bots:** Scrumpy (incoming webhook), Asty (OpenClaw, socket mode)
+- **MCP endpoint:** https://us-central1-workdotpk-a06dc.cloudfunctions.net/mcp
+- **Slack channels:** #daily-scrum, #leaves (C09U7GVJ31R), #references (C08UCQXH7D0), #tell-asty (Asty's task inbox). Each client also has its own channel — see `slackChannelId` on the client doc.
+- **Slack bots:** Asty (OpenClaw, socket mode)
+
+> **Deployed functions are `api`, `mcp`, `onTaskWritten`, `onLeaveWritten`.** The
+> old `slackWebhook` function and the `SLACK_WEBHOOK_URL` secret are gone —
+> Slack posting now happens inside the Firestore triggers via `SLACK_BOT_TOKEN`.
+> `exports.slack` in `functions/slack.js` is commented out at
+> [functions/index.js:1203](functions/index.js:1203).
 
 ## Project Structure
 
@@ -64,22 +74,32 @@ CLAUDE_SCRUM_MASTER.md  Slack interaction guide with examples
 
 ## Team
 
-| Name | Email |
-|------|-------|
-| Gyan | gyan@publicknowledge.co |
-| Charu | charu@publicknowledge.co |
-| Sharang | sharang@publicknowledge.co |
-| Anandu | anandu@publicknowledge.co |
+| Name | Email | Role |
+|------|-------|------|
+| Gyan | gyan@publicknowledge.co | admin |
+| Charu | charu@publicknowledge.co | admin |
+| Sharang | sharang@publicknowledge.co | member |
+| Mohit | mohit@publicknowledge.co | member |
+| Rakesh | rakesh@publicknowledge.co | member |
+| Devika | devika@publicknowledge.co | member |
 
 Auth is restricted to @publicknowledge.co Google accounts.
 
+**Two rosters, currently out of sync.** The frontend list is
+[src/config.js:31](src/config.js:31) (authoritative for the UI); the backend
+list is [functions/index.js:25](functions/index.js:25) and drives leave
+accrual in `createLeave`. The backend copy still has Anandu and Saurabh and is
+missing Devika. Keep both in step when the team changes.
+
 ## Firebase Secrets
 
-Two secrets are set via `firebase functions:secrets:set`:
-- `CLAUDE_API_KEY` — authenticates API requests (sent as `x-api-key` header). Also used by the OpenClaw pkwork plugin.
-- `SLACK_WEBHOOK_URL` — Scrumpy's incoming webhook for posting to #daily-scrum
+Five secrets are set via `firebase functions:secrets:set`:
+- `CLAUDE_API_KEY` — authenticates REST API requests (sent as `x-api-key` header). Also used by the OpenClaw pkwork plugin and internally by the `mcp` function.
+- `POKE_MCP_KEY` — bearer token for the `mcp` endpoint. Separate from `CLAUDE_API_KEY` so external-agent access can be revoked independently.
+- `SLACK_BOT_TOKEN` — used by the Firestore triggers to post to Slack.
+- `OPENCLAW_WEBHOOK_URL` / `OPENCLAW_WEBHOOK_SECRET` — notify Asty on task events.
 
-Retrieve the API key: `firebase functions:secrets:access CLAUDE_API_KEY`
+Retrieve a secret: `firebase functions:secrets:access CLAUDE_API_KEY`
 
 ## API Endpoints
 
@@ -112,11 +132,39 @@ All endpoints on `api` require header: `x-api-key: <CLAUDE_API_KEY>`
 | POST | /moodboards | Create mood board. Body: `{ name, description, referenceIds[], clientId, projectId, createdBy }` |
 | PATCH | /moodboards/:id | Update mood board |
 | DELETE | /moodboards/:id | Delete mood board |
+| GET | /leaves | List leaves. Filters: `?userEmail=x&status=x&startDate=x&endDate=x` |
+| POST | /leaves | Create leave. Body: `{ userEmail, userName, type, startDate, endDate, halfDay }`. `type` must be `personal`, `medical`, or `overtime`. Paid/unpaid split is computed against accrual for `personal`. |
+| PATCH | /leaves/:id | Cancel a leave |
+| GET | /leaves/balances | Accrued / used / available days per person |
 
-The `slackWebhook` endpoint accepts POST with `x-api-key` header and an `action` field:
-- `{"action": "scrum"}` — posts daily scrum summary to #daily-scrum
-- `{"action": "standup", "userEmail", "userName", "yesterday", "today", "blockers"}` — saves and posts standup
-- `{"action": "create_task", "title", "assignees", ...}` — creates task and posts confirmation
+**Routing is manual path-matching** ([functions/index.js:81](functions/index.js:81)),
+not Express. Only the exact method + segment-count combinations above exist;
+anything else returns `404 {"error":"Not found"}` — including plausible routes
+that are **not** implemented, such as `GET /tasks/:id` and `PATCH /clients/:id`.
+
+### MCP Bridge — PK Work as an MCP server
+
+`exports.mcp` ([functions/mcp.js](functions/mcp.js), wired at
+[functions/index.js:715](functions/index.js:715)) exposes PK Work to external
+MCP clients (Poke, cloud Claude instances, any MCP-capable agent).
+
+- **Endpoint:** `https://us-central1-workdotpk-a06dc.cloudfunctions.net/mcp`
+- **Auth:** `Authorization: Bearer <POKE_MCP_KEY>`
+- **Transport:** stateless streamable HTTP — **POST only**, `GET` returns 405
+- **Tools:** `pkwork_search`, `pkwork_status`, `pkwork_task_add`, `pkwork_task_set`, `pkwork_raw` (same five as the OpenClaw plugin)
+
+It proxies to the REST API using `CLAUDE_API_KEY` server-side, so MCP clients
+never hold the shared key. Prefer this over handing out `CLAUDE_API_KEY`
+directly — see [docs/AGENT_ACCESS.md](docs/AGENT_ACCESS.md) for the full
+external-agent setup guide.
+
+### Firestore Triggers — writes are not inert
+
+- `onTaskWritten` ([functions/index.js:726](functions/index.js:726)) — posts to Slack and notifies the OpenClaw/Asty webhook on task changes.
+- `onLeaveWritten` ([functions/index.js:853](functions/index.js:853)) — posts to #leaves for `personal`, `medical`, and `overtime` leave.
+
+There is no staging environment. Any write against the live API is visible to
+the whole team in Slack — keep that in mind when testing.
 
 ### Important: assignee vs assignees
 
@@ -134,6 +182,7 @@ The task model was migrated from `assignee` (single string) to `assignees` (arra
 - **references** — url, title, description, imageUrl, tags[], clientId, projectId, sharedBy, slackMessageTs, slackChannel, createdAt
 - **moodboards** — name, description, referenceIds[], clientId, projectId, createdBy, createdAt, updatedAt
 - **clientUsers** — email (doc ID), name, clientId, invitedBy, createdAt
+- **leaves** — userEmail, userName, type (`personal`/`medical`/`overtime`), startDate, endDate, halfDay, paidDays, unpaidDays, status
 
 ## Firestore Indexes
 
