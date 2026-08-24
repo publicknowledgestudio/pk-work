@@ -98,6 +98,19 @@ exports.api = onRequest(
       }
     }
 
+    // --- SCHEDULE (drag-to-day / daily focus) ---
+    if (segments[0] === 'schedule') {
+      if (req.method === 'GET' && segments.length === 1) {
+        return await getSchedule(req, res)
+      }
+      if (req.method === 'POST' && segments.length === 1) {
+        return await scheduleTask(req, res)
+      }
+      if (req.method === 'DELETE' && segments.length === 1) {
+        return await unscheduleTask(req, res)
+      }
+    }
+
     // --- ASTY: SEARCH + STATUS ---
     if (segments[0] === 'search' && req.method === 'GET') {
       return await astySearch(req, res)
@@ -429,6 +442,183 @@ async function resolveAssignees(input) {
   const out = []
   for (const v of arr) out.push(await resolveAssigneeEmail(v))
   return out.filter(Boolean)
+}
+
+// ===== SCHEDULE (dailyFocus) =====
+// Scheduling is NOT a field on the task — it lives in the dailyFocus
+// collection, one doc per person per day (`{userEmail}_{date}`) holding the
+// taskIds planned for that day. This is what dragging a task onto a day in the
+// web UI writes, and it is deliberately distinct from a task's deadline.
+
+function dailyFocusId(userEmail, date) {
+  return `${userEmail}_${date}`
+}
+
+function isIsoDate(value) {
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
+}
+
+// Resolve which person's day we are writing to.
+//
+// The task's assignee always wins, regardless of who triggered the schedule —
+// clicking "On it today" on someone else's task puts it on THEIR day, not
+// yours. Only when a task has no assignee do we fall back to the requester,
+// and in that case the requester claims it (the task is assigned to them).
+async function resolveScheduleUser(body, taskData) {
+  const assignees = (taskData && taskData.assignees) || []
+  if (assignees[0]) return { userEmail: assignees[0], claimed: false }
+
+  if (body.userEmail) return { userEmail: body.userEmail, claimed: true }
+  if (body.person) {
+    const resolved = await resolveAssignees([body.person])
+    if (resolved[0]) return { userEmail: resolved[0], claimed: true }
+  }
+  return { userEmail: null, claimed: false }
+}
+
+async function scheduleTask(req, res) {
+  const body = req.body || {}
+  const taskId = body.taskId
+  const date = body.date
+
+  if (!taskId) return res.status(400).json({ error: 'taskId is required' })
+  if (!isIsoDate(date)) {
+    return res.status(400).json({ error: 'date is required as YYYY-MM-DD' })
+  }
+
+  // Verify the task exists first — scheduling an unknown id would otherwise
+  // create a dailyFocus entry pointing at nothing.
+  const taskSnap = await db.collection('tasks').doc(taskId).get()
+  if (!taskSnap.exists) {
+    return res.status(404).json({ error: `Unknown task: ${taskId}` })
+  }
+
+  const { userEmail, claimed } = await resolveScheduleUser(body, taskSnap.data())
+  if (!userEmail) {
+    return res.status(400).json({
+      error: 'No person to schedule for: task is unassigned and no person/userEmail was given',
+    })
+  }
+
+  // An unassigned task scheduled by someone is thereby claimed by them, so the
+  // day it lands on and the task's owner stay consistent.
+  if (claimed) {
+    await db.collection('tasks').doc(taskId).update({
+      assignees: [userEmail],
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    })
+  }
+
+  const targetId = dailyFocusId(userEmail, date)
+  const batch = db.batch()
+
+  // A task occupies one day per person, so clear it from that person's other
+  // days first — same move semantics as dragging between days in the web app.
+  const existing = await db
+    .collection('dailyFocus')
+    .where('taskIds', 'array-contains', taskId)
+    .get()
+  for (const d of existing.docs) {
+    if (d.data().userEmail !== userEmail) continue
+    if (d.id === targetId) continue
+    batch.update(d.ref, {
+      taskIds: admin.firestore.FieldValue.arrayRemove(taskId),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    })
+  }
+
+  batch.set(
+    db.collection('dailyFocus').doc(targetId),
+    {
+      userEmail,
+      date,
+      taskIds: admin.firestore.FieldValue.arrayUnion(taskId),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    { merge: true }
+  )
+
+  await batch.commit()
+  return res.json({
+    ok: true,
+    taskId,
+    userEmail,
+    date,
+    claimed,
+    title: taskSnap.data().title || null,
+  })
+}
+
+async function unscheduleTask(req, res) {
+  const body = req.body || {}
+  const taskId = body.taskId
+  if (!taskId) return res.status(400).json({ error: 'taskId is required' })
+
+  const taskSnap = await db.collection('tasks').doc(taskId).get()
+  const { userEmail } = await resolveScheduleUser(
+    body,
+    taskSnap.exists ? taskSnap.data() : null
+  )
+
+  const existing = await db
+    .collection('dailyFocus')
+    .where('taskIds', 'array-contains', taskId)
+    .get()
+
+  const batch = db.batch()
+  let cleared = 0
+  for (const d of existing.docs) {
+    // With no person resolved, clear the task from every day it sits on.
+    if (userEmail && d.data().userEmail !== userEmail) continue
+    if (body.date && d.data().date !== body.date) continue
+    batch.update(d.ref, {
+      taskIds: admin.firestore.FieldValue.arrayRemove(taskId),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    })
+    cleared += 1
+  }
+  if (cleared > 0) await batch.commit()
+
+  return res.json({ ok: true, taskId, cleared })
+}
+
+async function getSchedule(req, res) {
+  const userEmail = req.query.userEmail ? String(req.query.userEmail) : null
+  const date = req.query.date ? String(req.query.date) : null
+  const taskId = req.query.taskId ? String(req.query.taskId) : null
+
+  // Look up which day(s) a single task is scheduled on.
+  if (taskId) {
+    const snap = await db
+      .collection('dailyFocus')
+      .where('taskIds', 'array-contains', taskId)
+      .get()
+    return res.json({
+      taskId,
+      scheduled: snap.docs.map((d) => ({
+        userEmail: d.data().userEmail,
+        date: d.data().date,
+      })),
+    })
+  }
+
+  if (!userEmail || !isIsoDate(date)) {
+    return res
+      .status(400)
+      .json({ error: 'Provide taskId, or both userEmail and date (YYYY-MM-DD)' })
+  }
+
+  const snap = await db
+    .collection('dailyFocus')
+    .doc(dailyFocusId(userEmail, date))
+    .get()
+  const data = snap.exists ? snap.data() : {}
+  return res.json({
+    userEmail,
+    date,
+    taskIds: data.taskIds || [],
+    timeBlocks: data.timeBlocks || [],
+  })
 }
 
 async function astySearch(req, res) {
