@@ -36,6 +36,7 @@ const SLACK_BOT_TOKEN = defineSecret('SLACK_BOT_TOKEN')
 const OPENCLAW_WEBHOOK_URL = defineSecret('OPENCLAW_WEBHOOK_URL')
 const OPENCLAW_WEBHOOK_SECRET = defineSecret('OPENCLAW_WEBHOOK_SECRET')
 const POKE_MCP_KEY = defineSecret('POKE_MCP_KEY')
+const PKWORK_SLACK_BOT_TOKEN = defineSecret('PKWORK_SLACK_BOT_TOKEN')
 
 const LEAVES_CHANNEL_ID = 'C09U7GVJ31R'
 const LEAVE_NOTIFY_TYPES = new Set(['personal', 'medical', 'overtime'])
@@ -450,103 +451,23 @@ async function resolveAssignees(input) {
 // taskIds planned for that day. This is what dragging a task onto a day in the
 // web UI writes, and it is deliberately distinct from a task's deadline.
 
-function dailyFocusId(userEmail, date) {
-  return `${userEmail}_${date}`
-}
+const { applySchedule, resolveScheduleUser, dailyFocusId, isIsoDate } = require('./schedule-core')
 
-function isIsoDate(value) {
-  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
-}
-
-// Resolve which person's day we are writing to.
-//
-// The task's assignee always wins, regardless of who triggered the schedule —
-// clicking "On it today" on someone else's task puts it on THEIR day, not
-// yours. Only when a task has no assignee do we fall back to the requester,
-// and in that case the requester claims it (the task is assigned to them).
-async function resolveScheduleUser(body, taskData) {
-  const assignees = (taskData && taskData.assignees) || []
-  if (assignees[0]) return { userEmail: assignees[0], claimed: false }
-
-  if (body.userEmail) return { userEmail: body.userEmail, claimed: true }
-  if (body.person) {
-    const resolved = await resolveAssignees([body.person])
-    if (resolved[0]) return { userEmail: resolved[0], claimed: true }
-  }
-  return { userEmail: null, claimed: false }
-}
-
+// scheduleTask is a thin wrapper over the shared core so that "On it today" in
+// the PK Work Slack app and a drag in the web app cannot drift apart.
 async function scheduleTask(req, res) {
   const body = req.body || {}
-  const taskId = body.taskId
-  const date = body.date
-
-  if (!taskId) return res.status(400).json({ error: 'taskId is required' })
-  if (!isIsoDate(date)) {
-    return res.status(400).json({ error: 'date is required as YYYY-MM-DD' })
-  }
-
-  // Verify the task exists first — scheduling an unknown id would otherwise
-  // create a dailyFocus entry pointing at nothing.
-  const taskSnap = await db.collection('tasks').doc(taskId).get()
-  if (!taskSnap.exists) {
-    return res.status(404).json({ error: `Unknown task: ${taskId}` })
-  }
-
-  const { userEmail, claimed } = await resolveScheduleUser(body, taskSnap.data())
-  if (!userEmail) {
-    return res.status(400).json({
-      error: 'No person to schedule for: task is unassigned and no person/userEmail was given',
-    })
-  }
-
-  // An unassigned task scheduled by someone is thereby claimed by them, so the
-  // day it lands on and the task's owner stay consistent.
-  if (claimed) {
-    await db.collection('tasks').doc(taskId).update({
-      assignees: [userEmail],
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    })
-  }
-
-  const targetId = dailyFocusId(userEmail, date)
-  const batch = db.batch()
-
-  // A task occupies one day per person, so clear it from that person's other
-  // days first — same move semantics as dragging between days in the web app.
-  const existing = await db
-    .collection('dailyFocus')
-    .where('taskIds', 'array-contains', taskId)
-    .get()
-  for (const d of existing.docs) {
-    if (d.data().userEmail !== userEmail) continue
-    if (d.id === targetId) continue
-    batch.update(d.ref, {
-      taskIds: admin.firestore.FieldValue.arrayRemove(taskId),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    })
-  }
-
-  batch.set(
-    db.collection('dailyFocus').doc(targetId),
-    {
-      userEmail,
-      date,
-      taskIds: admin.firestore.FieldValue.arrayUnion(taskId),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    },
-    { merge: true }
-  )
-
-  await batch.commit()
-  return res.json({
-    ok: true,
-    taskId,
-    userEmail,
-    date,
-    claimed,
-    title: taskSnap.data().title || null,
+  const result = await applySchedule({
+    db,
+    admin,
+    resolveAssignees,
+    taskId: body.taskId,
+    date: body.date,
+    person: body.person,
+    userEmail: body.userEmail,
   })
+  if (!result.ok) return res.status(result.status).json({ error: result.error })
+  return res.json(result)
 }
 
 async function unscheduleTask(req, res) {
@@ -555,10 +476,11 @@ async function unscheduleTask(req, res) {
   if (!taskId) return res.status(400).json({ error: 'taskId is required' })
 
   const taskSnap = await db.collection('tasks').doc(taskId).get()
-  const { userEmail } = await resolveScheduleUser(
+  const { userEmail } = await resolveScheduleUser({
     body,
-    taskSnap.exists ? taskSnap.data() : null
-  )
+    taskData: taskSnap.exists ? taskSnap.data() : null,
+    resolveAssignees,
+  })
 
   const existing = await db
     .collection('dailyFocus')
@@ -911,10 +833,19 @@ exports.mcp = onRequest(
   })
 )
 
+// === PK Work Slack app — deterministic client digest + button handling ===
+// Replaces the OpenClaw `client-todo-digest` agent cron. See functions/pkwork-slack.js.
+
+const pkworkSlack = require('./pkwork-slack')
+
+exports.pkworkSlack = pkworkSlack.createInteractivityHandler({ resolveAssignees })
+exports.clientTodoDigest = pkworkSlack.createDigestSchedule()
+exports.digestDryRun = pkworkSlack.createDigestDryRun()
+
 // === Firestore Trigger — Notify OpenClaw on key task events ===
 
 exports.onTaskWritten = onDocumentWritten(
-  { document: 'tasks/{taskId}', secrets: [OPENCLAW_WEBHOOK_URL, OPENCLAW_WEBHOOK_SECRET, SLACK_BOT_TOKEN] },
+  { document: 'tasks/{taskId}', secrets: [OPENCLAW_WEBHOOK_URL, OPENCLAW_WEBHOOK_SECRET, SLACK_BOT_TOKEN, PKWORK_SLACK_BOT_TOKEN] },
   async (event) => {
     const after = event.data?.after
     if (!after?.exists) return // task deleted — ignore
@@ -972,8 +903,11 @@ exports.onTaskWritten = onDocumentWritten(
       const projectName = project?.name || ''
       notifyOpenClaw(event.params.taskId, { ...task, projectName, event: 'task_completed' }, 'completed')
 
-      // Post to client's Slack channel via Asty bot token (project channel overrides client channel)
-      if (task.clientId) {
+      // Post to client's Slack channel via Asty bot token (project channel overrides client channel).
+      // Skipped when the change came from a PK Work digest button: that click
+      // already rewrites the digest message in place, and two notifications for
+      // one click is noise.
+      if (task.clientId && !pkworkSlack.isFreshSlackWrite(task)) {
         const clientDoc = await db.collection('clients').doc(task.clientId).get()
         const client = clientDoc.exists ? clientDoc.data() : null
         const channelId = project?.slackChannelId || client?.slackChannelId
@@ -1011,9 +945,13 @@ async function postToSlackChannel(taskId, channelId, text, actedBy) {
     },
   }).catch((err) => console.error('Failed writing slackNotification:', err))
 
-  const token = process.env.SLACK_BOT_TOKEN
+  // Task notifications post as PK Work, not as Asty — they are PK Work's own
+  // acknowledgements, and showing them under the assistant's name made the two
+  // look like the same thing. Falls back to the Asty token only if the PK Work
+  // one is missing, so a misconfiguration degrades rather than goes silent.
+  const token = process.env.PKWORK_SLACK_BOT_TOKEN || process.env.SLACK_BOT_TOKEN
   if (!token) {
-    console.error('Slack post skipped: SLACK_BOT_TOKEN not configured')
+    console.error('Slack post skipped: no bot token configured')
     return writeOutcome('failed', 'missing_bot_token')
   }
 
@@ -1041,7 +979,7 @@ async function postToSlackChannel(taskId, channelId, text, actedBy) {
 // wfh is intentionally excluded — it's a daily status, not time off.
 
 exports.onLeaveWritten = onDocumentWritten(
-  { document: 'leaves/{leaveId}', secrets: [SLACK_BOT_TOKEN] },
+  { document: 'leaves/{leaveId}', secrets: [SLACK_BOT_TOKEN, PKWORK_SLACK_BOT_TOKEN] },
   async (event) => {
     const after = event.data?.after
     const before = event.data?.before
@@ -1170,9 +1108,12 @@ async function postToLeavesChannel(leaveId, channelId, text, actedBy) {
     },
   }).catch((err) => console.error('Failed writing leaves slackNotification:', err))
 
-  const token = process.env.SLACK_BOT_TOKEN
+  // Posts as PK Work, like the task notifications — these are PK Work's own
+  // records, not the assistant talking. #leaves is a public channel, so
+  // chat:write.public covers it without an invite.
+  const token = process.env.PKWORK_SLACK_BOT_TOKEN || process.env.SLACK_BOT_TOKEN
   if (!token) {
-    console.error('Leaves Slack post skipped: SLACK_BOT_TOKEN not configured')
+    console.error('Leaves Slack post skipped: no bot token configured')
     return writeOutcome('failed', 'missing_bot_token')
   }
 
