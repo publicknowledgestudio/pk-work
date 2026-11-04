@@ -5,6 +5,8 @@ import {
   setDoc,
   updateDoc,
   deleteDoc,
+  writeBatch,
+  limit,
   getDocs,
   onSnapshot,
   query,
@@ -118,6 +120,26 @@ function resizeImageDataUrl(dataUrl, maxSize = 192) {
     img.onerror = reject
     img.src = dataUrl
   })
+}
+
+// ===== Asterisk captures =====
+
+export function subscribeToCaptures(db, callback) {
+  if (isDemo()) { callback([]); return () => {} }
+  const q = query(collection(db, 'captures'), orderBy('createdAt', 'desc'), limit(200))
+  return onSnapshot(q, (snap) => {
+    callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+  })
+}
+
+// Removes the task Asterisk filed and marks its capture undone, together.
+export async function undoCapture(db, capture, userEmail) {
+  const batch = writeBatch(db)
+  batch.delete(doc(db, 'tasks', capture.taskId))
+  batch.update(doc(db, 'captures', capture.id), {
+    status: 'undone', undoneBy: userEmail, updatedAt: serverTimestamp(),
+  })
+  return batch.commit()
 }
 
 export function subscribeToClients(db, callback) {

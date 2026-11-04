@@ -83,6 +83,11 @@ exports.api = onRequest(
   const segments = path.split('/')
 
   try {
+    // --- CAPTURES ---
+    if (segments[0] === 'captures' && req.method === 'PUT' && segments.length === 2) {
+      return await putCapture(req, res, segments[1])
+    }
+
     // --- TASKS ---
     if (segments[0] === 'tasks') {
       if (req.method === 'GET' && segments.length === 1) {
@@ -417,6 +422,26 @@ async function updateTask(req, res, taskId) {
 async function deleteTask(req, res, taskId) {
   await db.collection('tasks').doc(taskId).delete()
   res.json({ id: taskId, deleted: true })
+}
+
+// The doc id is the intake service's capture id, so retries overwrite one row.
+// Undo happens in the app, so an undone row is never moved back.
+async function putCapture(req, res, captureId) {
+  let row
+  try {
+    row = normalizeCaptureLog(req.body)
+  } catch (err) {
+    return res.status(400).json({ error: err.message })
+  }
+  const ref = db.collection('captures').doc(captureId)
+  const existing = await ref.get()
+  if (existing.exists && existing.data().status === 'undone') row.status = 'undone'
+  await ref.set({
+    ...row,
+    createdAt: existing.exists ? existing.data().createdAt : admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  })
+  res.json({ id: captureId, saved: true })
 }
 
 async function listTaskComments(req, res, taskId) {
@@ -881,7 +906,7 @@ exports.mcp = onRequest(
 // Replaces the OpenClaw `client-todo-digest` agent cron. See functions/pkwork-slack.js.
 
 const pkworkSlack = require('./pkwork-slack')
-const { normalizeSource, normalizeCapture, normalizeComment } = require('./task-extras')
+const { normalizeSource, normalizeCapture, normalizeCaptureLog, normalizeComment } = require('./task-extras')
 
 exports.pkworkSlack = pkworkSlack.createInteractivityHandler({ resolveAssignees })
 exports.clientTodoDigest = pkworkSlack.createDigestSchedule()

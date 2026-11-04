@@ -39,6 +39,16 @@ service cloud.firestore {
       }
     }
 
+    // Asterisk's capture feed. The API writes rows; the team can only undo a
+    // filed task, which is the one change the Asterisk screen makes.
+    match /captures/{captureId} {
+      allow read: if isTeamMember();
+      allow update: if isTeamMember()
+                    && resource.data.status == 'filed'
+                    && request.resource.data.status == 'undone'
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'undoneBy', 'updatedAt']);
+    }
+
     // Standups collection
     match /standups/{standupId} {
       allow read: if isTeamMember();

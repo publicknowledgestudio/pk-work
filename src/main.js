@@ -15,6 +15,7 @@ import { renderMyDay } from './my-day.js'
 import { renderClients, cleanupClients } from './clients.js'
 import { renderPeople, cleanupPeople } from './people.js'
 import { renderReferences, cleanupReferences } from './references.js'
+import { renderAsterisk, cleanupAsterisk } from './asterisk.js'
 import { renderTimesheets } from './timesheets.js'
 import { openModal } from './modal.js'
 import { initContextMenu } from './context-menu.js'
@@ -84,6 +85,7 @@ const ROUTES = {
   '/timesheets':    { view: 'timesheets' },
   '/people':        { view: 'people' },
   '/references':    { view: 'references' },
+  '/asterisk':      { view: 'asterisk' },
   '/manage':        { view: 'clients' },
   '/attendance':        { view: 'attendance' },
   '/contracts':         { view: 'contracts' },
@@ -95,7 +97,7 @@ const ROUTES = {
 const VIEW_TO_PATH = {
   'my-day': '/my-week', 'backlog': '/backlog', 'scrum': '/scrum', 'team-timeline': '/timeline',
   'timesheets': '/timesheets', 'people': '/people',
-  'references': '/references', 'clients': '/manage',
+  'references': '/references', 'asterisk': '/asterisk', 'clients': '/manage',
   'attendance': '/attendance', 'contracts': '/contracts',
   'client-board': '/client-board', 'client-timesheets': '/client-timesheets',
   'client-timeline': '/client-timeline',
@@ -105,7 +107,7 @@ const BOARD_TO_PATH = {
   'client': '/board/clients', 'project': '/board/projects',
 }
 
-const TEAM_ONLY_VIEWS = ['my-day', 'backlog', 'board', 'scrum', 'profile', 'team-timeline', 'timesheets', 'people', 'references', 'clients', 'attendance', 'contracts']
+const TEAM_ONLY_VIEWS = ['my-day', 'backlog', 'board', 'scrum', 'profile', 'team-timeline', 'timesheets', 'people', 'references', 'asterisk', 'clients', 'attendance', 'contracts']
 
 // #/profile/<email> — parameterized route, resolved outside the static table
 let currentProfileEmail = ''
@@ -1101,6 +1103,7 @@ function renderCurrentView() {
   if (currentView !== 'clients') cleanupClients()
   if (currentView !== 'people') cleanupPeople()
 if (currentView !== 'references') cleanupReferences()
+if (currentView !== 'asterisk') cleanupAsterisk()
   if (currentView !== 'attendance') cleanupAttendance()
   if (currentView !== 'contracts') cleanupContracts()
   if (currentView !== 'my-day') unmountGarden()
@@ -1120,6 +1123,9 @@ if (currentView !== 'references') cleanupReferences()
       break
     case 'people':
       renderPeople(mainContent, ctx)
+      break
+    case 'asterisk':
+      renderAsterisk(mainContent, ctx)
       break
     case 'references':
       renderReferences(mainContent, ctx)

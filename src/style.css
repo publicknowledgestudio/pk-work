@@ -7587,3 +7587,13 @@ body {
 /* Scrum per-person quick-add */
 .scrum-add-wrap { margin-top: 2px; }
 .scrum-add-input { width: 100%; }
+
+/* Asterisk capture feed */
+.capture-view { max-width: 760px; margin: 0 auto; padding: 24px 16px; }
+.capture-tabs { display: flex; gap: 8px; margin: 16px 0; }
+.capture-row { padding: 16px 0; border-top: 1px solid var(--border); }
+.capture-meta { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; opacity: 0.7; }
+.capture-title { margin: 8px 0 4px; font-size: 15px; }
+.capture-text { margin: 4px 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.capture-reason { margin: 4px 0 8px; font-size: 13px; opacity: 0.7; }
+.capture-empty { opacity: 0.7; }

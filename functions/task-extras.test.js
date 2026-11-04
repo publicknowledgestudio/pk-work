@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { normalizeSource, normalizeCapture, normalizeComment, MAX_COMMENT_LENGTH } from './task-extras.js'
+import { normalizeSource, normalizeCapture, normalizeCaptureLog, normalizeComment, MAX_COMMENT_LENGTH } from './task-extras.js'
 
 describe('normalizeSource', () => {
   it('returns null when absent', () => {
@@ -22,6 +22,20 @@ describe('normalizeCapture', () => {
   it('requires a capture id', () => expect(() => normalizeCapture({})).toThrow('captureId'))
   it('keeps id and reasoning', () => {
     expect(normalizeCapture({ captureId: 'a', reasoning: 'b', y: 1 })).toEqual({ captureId: 'a', reasoning: 'b' })
+  })
+})
+
+describe('normalizeCaptureLog', () => {
+  const row = { channelId: 'C1', messageTs: '1.2', kind: 'request', status: 'dry', extra: 1 }
+  it('keeps known fields', () => {
+    const out = normalizeCaptureLog(row)
+    expect(out.kind).toBe('request')
+    expect('extra' in out).toBe(false)
+  })
+  it('rejects bad rows', () => {
+    expect(() => normalizeCaptureLog({ ...row, kind: 'x' })).toThrow('kind')
+    expect(() => normalizeCaptureLog({ ...row, status: 'x' })).toThrow('status')
+    expect(() => normalizeCaptureLog({ ...row, channelId: '' })).toThrow('channelId')
   })
 })
 

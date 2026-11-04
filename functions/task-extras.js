@@ -36,6 +36,34 @@ function normalizeCapture(capture) {
   return { captureId, reasoning: cleanString(capture.reasoning) }
 }
 
+const CAPTURE_KINDS = ['request', 'followup', 'chatter', 'unclear']
+const CAPTURE_STATUSES = ['dry', 'skipped', 'filing', 'filed', 'failed', 'undone']
+
+// One row of Asterisk's capture feed, mirrored from the intake service.
+function normalizeCaptureLog(data) {
+  const body = data || {}
+  const kind = cleanString(body.kind)
+  const status = cleanString(body.status)
+  if (!CAPTURE_KINDS.includes(kind)) throw new Error('kind is invalid')
+  if (!CAPTURE_STATUSES.includes(status)) throw new Error('status is invalid')
+  const channelId = cleanString(body.channelId)
+  const messageTs = cleanString(body.messageTs)
+  if (!channelId || !messageTs) throw new Error('channelId and messageTs are required')
+  return {
+    channelId,
+    messageTs,
+    clientId: cleanString(body.clientId),
+    clientName: cleanString(body.clientName),
+    text: cleanString(body.text).slice(0, MAX_COMMENT_LENGTH),
+    kind,
+    status,
+    title: cleanString(body.title),
+    reasoning: cleanString(body.reasoning),
+    taskId: cleanString(body.taskId),
+    url: cleanString(body.url),
+  }
+}
+
 function normalizeComment(data) {
   const body = data || {}
   const text = cleanString(body.text)
@@ -48,4 +76,4 @@ function normalizeComment(data) {
   return { text, author, source: normalizeSource(body.source) }
 }
 
-module.exports = { normalizeSource, normalizeCapture, normalizeComment, MAX_COMMENT_LENGTH }
+module.exports = { normalizeSource, normalizeCapture, normalizeCaptureLog, normalizeComment, MAX_COMMENT_LENGTH }
