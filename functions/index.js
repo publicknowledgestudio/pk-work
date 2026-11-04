@@ -906,7 +906,7 @@ exports.mcp = onRequest(
 // Replaces the OpenClaw `client-todo-digest` agent cron. See functions/pkwork-slack.js.
 
 const pkworkSlack = require('./pkwork-slack')
-const { normalizeSource, normalizeCapture, normalizeCaptureLog, normalizeComment } = require('./task-extras')
+const { asteriskTaskMessage, normalizeSource, normalizeCapture, normalizeCaptureLog, normalizeComment } = require('./task-extras')
 
 exports.pkworkSlack = pkworkSlack.createInteractivityHandler({ resolveAssignees })
 exports.clientTodoDigest = pkworkSlack.createDigestSchedule()
@@ -961,7 +961,9 @@ exports.onTaskWritten = onDocumentWritten(
         const projectName = project?.name || ''
         const userName = clientUserDoc.exists ? (clientUserDoc.data().name || createdBy.split('@')[0]) : createdBy.split('@')[0]
         const contextLine = [projectName, client.name].filter(Boolean).join(' · ')
-        const message = `📋 New task created by external user "${userName}" — ${task.title}\n${contextLine}`
+        const message = createdBy === 'asterisk'
+          ? asteriskTaskMessage({ title: task.title, assignees: task.assignees || [], clientName: client.name, projectName })
+          : `📋 New task created by external user "${userName}" — ${task.title}\n${contextLine}`
         await postToSlackChannel(event.params.taskId, channelId, message, createdBy)
       }
     }

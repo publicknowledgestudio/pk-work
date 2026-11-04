@@ -76,4 +76,17 @@ function normalizeComment(data) {
   return { text, author, source: normalizeSource(body.source) }
 }
 
-module.exports = { normalizeSource, normalizeCapture, normalizeCaptureLog, normalizeComment, MAX_COMMENT_LENGTH }
+// The Slack post for a task Asterisk created.
+function asteriskTaskMessage({ title, assignees = [], clientName = '', projectName = '' }) {
+  const names = assignees.map((email) => {
+    const name = String(email).split('@')[0]
+    return name.charAt(0).toUpperCase() + name.slice(1)
+  })
+  const who = names.length ? ` (for ${names.join(', ')})` : ''
+  const prefix = `${clientName}: `
+  const task = clientName && title.startsWith(prefix) ? title.slice(prefix.length) : title
+  const line = [clientName, projectName, task].filter(Boolean).join(' · ')
+  return `New task${who} added to PK Work by Asterisk\n⭕️ ${line}`
+}
+
+module.exports = { asteriskTaskMessage, normalizeSource, normalizeCapture, normalizeCaptureLog, normalizeComment, MAX_COMMENT_LENGTH }

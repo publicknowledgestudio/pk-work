@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { normalizeSource, normalizeCapture, normalizeCaptureLog, normalizeComment, MAX_COMMENT_LENGTH } from './task-extras.js'
+import { asteriskTaskMessage, normalizeSource, normalizeCapture, normalizeCaptureLog, normalizeComment, MAX_COMMENT_LENGTH } from './task-extras.js'
 
 describe('normalizeSource', () => {
   it('returns null when absent', () => {
@@ -22,6 +22,16 @@ describe('normalizeCapture', () => {
   it('requires a capture id', () => expect(() => normalizeCapture({})).toThrow('captureId'))
   it('keeps id and reasoning', () => {
     expect(normalizeCapture({ captureId: 'a', reasoning: 'b', y: 1 })).toEqual({ captureId: 'a', reasoning: 'b' })
+  })
+})
+
+describe('asteriskTaskMessage', () => {
+  it('names the person, client, project and task', () => {
+    expect(asteriskTaskMessage({ title: 'Absentia Labs: Audit API', assignees: ['gyan@publicknowledge.co'], clientName: 'Absentia Labs', projectName: 'Product' }))
+      .toBe('New task (for Gyan) added to PK Work by Asterisk\n⭕️ Absentia Labs · Product · Audit API')
+  })
+  it('leaves out what it does not have', () => {
+    expect(asteriskTaskMessage({ title: 'Audit', clientName: 'Brunk' })).toBe('New task added to PK Work by Asterisk\n⭕️ Brunk · Audit')
   })
 })
 
