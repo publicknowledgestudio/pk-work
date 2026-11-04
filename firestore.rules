@@ -32,6 +32,11 @@ service cloud.firestore {
       allow update: if isClientUser() && resource.data.clientId == clientIdForUser()
                        && request.resource.data.clientId == clientIdForUser();
       allow delete: if isTeamMember();
+
+      // Comments are internal and written through the API.
+      match /comments/{commentId} {
+        allow read: if isTeamMember();
+      }
     }
 
     // Standups collection

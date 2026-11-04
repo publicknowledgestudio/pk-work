@@ -240,6 +240,26 @@ function buildServer({ apiBase, internalApiKey }) {
   )
 
   server.registerTool(
+    'pkwork_task_comment',
+    {
+      title: 'PK Work: Comment on a task',
+      description: 'Add an internal comment to a task, such as a client follow-up. Need a taskId — use pkwork_search to find it.',
+      inputSchema: {
+        taskId: z.string(),
+        text: z.string(),
+      },
+    },
+    async ({ taskId, text: commentText }) => {
+      try {
+        await api('POST', `/tasks/${taskId}/comments`, { text: commentText, author: 'poke' })
+        return text(`💬 Commented on ${taskId}`)
+      } catch (err) {
+        return errorText(err.message)
+      }
+    }
+  )
+
+  server.registerTool(
     'pkwork_raw',
     {
       title: 'PK Work: Raw API call',

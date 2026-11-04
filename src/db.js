@@ -62,6 +62,8 @@ export async function createClient(db, data) {
     defaultHourlyRate: data.defaultHourlyRate || 0,
     currency: data.currency || 'INR',
     slackChannelId: data.slackChannelId || '',
+    clientSharedChannelId: data.clientSharedChannelId || '',
+    defaultOwner: data.defaultOwner || '',
     createdAt: serverTimestamp(),
   })
 }

@@ -94,6 +94,10 @@ exports.api = onRequest(
       if (req.method === 'PATCH' && segments.length === 2) {
         return await updateTask(req, res, segments[1])
       }
+      if (segments.length === 3 && segments[2] === 'comments') {
+        if (req.method === 'GET') return await listTaskComments(req, res, segments[1])
+        if (req.method === 'POST') return await addTaskComment(req, res, segments[1])
+      }
       if (req.method === 'DELETE' && segments.length === 2) {
         return await deleteTask(req, res, segments[1])
       }
@@ -323,6 +327,14 @@ async function createTask(req, res) {
   const assigneesRaw = data.assignees || (data.assignee ? [data.assignee] : [])
   const assignees = await resolveAssignees(assigneesRaw)
 
+  let source, capture
+  try {
+    source = normalizeSource(data.source)
+    capture = normalizeCapture(data.capture)
+  } catch (err) {
+    return res.status(400).json({ error: err.message })
+  }
+
   const task = {
     title: data.title,
     description: data.description || '',
@@ -337,6 +349,8 @@ async function createTask(req, res) {
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     closedAt: null,
     createdBy: data.createdBy || 'claude',
+    source,
+    capture,
   }
 
   const ref = await db.collection('tasks').add(task)
@@ -346,6 +360,13 @@ async function createTask(req, res) {
 async function updateTask(req, res, taskId) {
   const data = req.body
   const update = { ...data, updatedAt: admin.firestore.FieldValue.serverTimestamp() }
+
+  try {
+    if ('source' in data) update.source = normalizeSource(data.source)
+    if ('capture' in data) update.capture = normalizeCapture(data.capture)
+  } catch (err) {
+    return res.status(400).json({ error: err.message })
+  }
 
   // Resolve name fields if provided. Unresolvable names are a 400, not a
   // silently dropped field — callers like Asty need actionable feedback.
@@ -396,6 +417,29 @@ async function updateTask(req, res, taskId) {
 async function deleteTask(req, res, taskId) {
   await db.collection('tasks').doc(taskId).delete()
   res.json({ id: taskId, deleted: true })
+}
+
+async function listTaskComments(req, res, taskId) {
+  const taskRef = db.collection('tasks').doc(taskId)
+  if (!(await taskRef.get()).exists) return res.status(404).json({ error: 'Task not found' })
+  const snap = await taskRef.collection('comments').orderBy('createdAt').get()
+  res.json({ comments: snap.docs.map((d) => ({ id: d.id, ...d.data() })) })
+}
+
+async function addTaskComment(req, res, taskId) {
+  let comment
+  try {
+    comment = normalizeComment(req.body)
+  } catch (err) {
+    return res.status(400).json({ error: err.message })
+  }
+  const taskRef = db.collection('tasks').doc(taskId)
+  if (!(await taskRef.get()).exists) return res.status(404).json({ error: 'Task not found' })
+  const ref = await taskRef.collection('comments').add({
+    ...comment,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  })
+  res.status(201).json({ id: ref.id, ...comment })
 }
 
 // === Asty / OpenClaw: name resolvers + search + status digest ===
@@ -837,6 +881,7 @@ exports.mcp = onRequest(
 // Replaces the OpenClaw `client-todo-digest` agent cron. See functions/pkwork-slack.js.
 
 const pkworkSlack = require('./pkwork-slack')
+const { normalizeSource, normalizeCapture, normalizeComment } = require('./task-extras')
 
 exports.pkworkSlack = pkworkSlack.createInteractivityHandler({ resolveAssignees })
 exports.clientTodoDigest = pkworkSlack.createDigestSchedule()

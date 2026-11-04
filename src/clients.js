@@ -431,6 +431,8 @@ function openClientForm(existing) {
   const rate = existing?.defaultHourlyRate || ''
   const currency = existing?.currency || 'INR'
   const slack = existing?.slackChannelId || ''
+  const sharedChannel = existing?.clientSharedChannelId || ''
+  const defaultOwner = existing?.defaultOwner || ''
   const logoUrl = existing?.logoUrl || ''
 
   form.innerHTML = `
@@ -459,6 +461,17 @@ function openClientForm(existing) {
     <div class="rate-field" style="width:100%">
       <label class="form-label-sm">Slack Channel ID</label>
       <input type="text" id="cf-slack" class="form-input" placeholder="e.g. C08UCQXH7D0" value="${escHtml(slack)}">
+    </div>
+    <div class="rate-field" style="width:100%">
+      <label class="form-label-sm">Client-shared Slack Channel ID</label>
+      <input type="text" id="cf-shared-channel" class="form-input" placeholder="Channel Asterisk may read" value="${escHtml(sharedChannel)}">
+    </div>
+    <div class="rate-field" style="width:100%">
+      <label class="form-label-sm">Default owner</label>
+      <select id="cf-default-owner" class="form-select">
+        <option value="">None</option>
+        ${TEAM.map((m) => `<option value="${escHtml(m.email)}"${m.email === defaultOwner ? ' selected' : ''}>${escHtml(m.name)}</option>`).join('')}
+      </select>
     </div>
     <div class="inline-form-actions">
       <button class="btn-primary" id="cf-save">${existing ? 'Save' : 'Add'}</button>
@@ -508,6 +521,8 @@ function openClientForm(existing) {
     const newRate = parseFloat(document.getElementById('cf-rate').value) || 0
     const newCurrency = document.getElementById('cf-currency').value || 'INR'
     const newSlack = document.getElementById('cf-slack').value.trim()
+    const newSharedChannel = document.getElementById('cf-shared-channel').value.trim()
+    const newDefaultOwner = document.getElementById('cf-default-owner').value
     const saveBtn = document.getElementById('cf-save')
     saveBtn.disabled = true
     saveBtn.textContent = 'Saving…'
@@ -520,10 +535,12 @@ function openClientForm(existing) {
         }
         await updateClient(currentCtx.db, editingClientId, {
           name: newName, logoUrl: finalLogoUrl, defaultHourlyRate: newRate, currency: newCurrency, slackChannelId: newSlack,
+          clientSharedChannelId: newSharedChannel, defaultOwner: newDefaultOwner,
         })
       } else {
         const docRef = await createClient(currentCtx.db, {
           name: newName, logoUrl: '', defaultHourlyRate: newRate, currency: newCurrency, slackChannelId: newSlack,
+          clientSharedChannelId: newSharedChannel, defaultOwner: newDefaultOwner,
         })
         if (selectedLogoFile) {
           const url = await uploadClientLogo(selectedLogoFile, docRef.id)
