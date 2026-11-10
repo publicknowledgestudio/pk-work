@@ -13,6 +13,13 @@ service cloud.firestore {
         request.auth.token.email.matches('.*@publicknowledge[.]co$');
     }
 
+    function isLeaveAdmin() {
+      return isTeamMember() && request.auth.token.email in ['charu@publicknowledge.co', 'gyan@publicknowledge.co'];
+    }
+    function eligibleLeave(email) {
+      return email in ['sharang@publicknowledge.co', 'mohit@publicknowledge.co', 'rakesh@publicknowledge.co'];
+    }
+
     function isClientUser() {
       return request.auth != null &&
         exists(/databases/$(database)/documents/clientUsers/$(request.auth.token.email));
@@ -129,25 +136,29 @@ service cloud.firestore {
       allow write: if isTeamMember();
     }
 
-    // Leaves collection (attendance & leave tracking)
+    // Leave closes are written only through the authenticated backend.
+    match /leaveCloses/{closeId} {
+      allow read: if isLeaveAdmin();
+      allow write: if false;
+    }
     match /leaves/{leaveId} {
       allow read: if isTeamMember();
-      allow create: if isTeamMember();
-      allow update: if isTeamMember();
-      allow delete: if isTeamMember();
+      allow create: if isTeamMember() && eligibleLeave(request.resource.data.userEmail)
+        && (isLeaveAdmin() || request.resource.data.userEmail == request.auth.token.email)
+        && (!(request.resource.data.get('creditApproved', false)) || isLeaveAdmin());
+      allow update: if isTeamMember() && eligibleLeave(resource.data.userEmail)
+        && request.resource.data.userEmail == resource.data.userEmail
+        && (isLeaveAdmin() || resource.data.userEmail == request.auth.token.email)
+        && (isLeaveAdmin() || request.resource.data.get('creditApproved', false) == resource.data.get('creditApproved', false));
+      allow delete: if isLeaveAdmin();
     }
-
-    // Studio holidays (admin-managed)
     match /holidays/{holidayId} {
       allow read: if isTeamMember();
-      allow write: if isTeamMember();
+      allow write: if isLeaveAdmin();
     }
-
-    // Contracts (per-person engagement periods)
     match /contracts/{contractId} {
       allow read: if isTeamMember();
-      allow write: if isTeamMember();
+      allow write: if isLeaveAdmin();
     }
-
   }
 }

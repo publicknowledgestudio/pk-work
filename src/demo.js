@@ -267,6 +267,7 @@ export const demo = {
       defaultHourlyRate: data.defaultHourlyRate || 0,
       currency: data.currency || 'INR',
       slackChannelId: data.slackChannelId || '',
+      slackChannelName: data.slackChannelName || '',
       archived: false,
     })
     emitCollection('clients')
@@ -285,6 +286,18 @@ export const demo = {
     emitCollection('clients')
   },
 
+  // Stand-in for the slackChannels Cloud Function (see slack-channels.js).
+  listSlackChannels: async () => [
+    { id: 'C0ABSENTIA1', name: 'absentia', isPrivate: false, isMember: false },
+    { id: 'C0BRUNKDEMO', name: 'brunk', isPrivate: false, isMember: true },
+    { id: 'C0BRUNKSOC1', name: 'brunk-social', isPrivate: false, isMember: true },
+    { id: 'C0HAMMOCK01', name: 'hammock', isPrivate: false, isMember: true },
+    { id: 'C0MERCURY01', name: 'mercury', isPrivate: true, isMember: true },
+    { id: 'C0PRESAI001', name: 'presentations-ai', isPrivate: false, isMember: true },
+    { id: 'C0SCCONLINE', name: 'scc-online', isPrivate: false, isMember: false },
+    { id: 'C0STUDIO001', name: 'studio', isPrivate: false, isMember: true },
+  ],
+
   // The real uploadClientLogo reads + resizes the file to a data URL. In demo we
   // just hand back an object URL for the picked file so the preview renders it.
   uploadClientLogo: async (file) => {
@@ -300,6 +313,7 @@ export const demo = {
       hourlyRate: data.hourlyRate || 0,
       currency: data.currency || 'INR',
       slackChannelId: data.slackChannelId || '',
+      slackChannelName: data.slackChannelName || '',
     })
     emitCollection('projects')
     return { id }

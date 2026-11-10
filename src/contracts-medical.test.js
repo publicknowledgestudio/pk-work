@@ -109,7 +109,7 @@ describe('Sharang scenario — fresh contract starts fresh', () => {
     expect(usedInTerm).toBe(0)
   })
 
-  it('accrues personal from the fresh contract only (1 month by mid-July)', () => {
-    expect(contractMonths(contract, asOf)).toBe(1)
+  it('accrues no personal leave before the first completed month', () => {
+    expect(contractMonths(contract, asOf)).toBe(0)
   })
 })

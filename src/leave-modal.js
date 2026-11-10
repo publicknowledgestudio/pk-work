@@ -1,6 +1,6 @@
+import { calculate } from '../functions/leave-policy.mjs'
 import { TEAM, isAdmin, getAttendanceTeam } from './config.js'
 import { createLeave, updateLeave } from './db.js'
-import { contractsForUser, currentContract, medicalPoolForContract, isWithinContractTerm, contractMonths } from './utils/contracts.js'
 import { toLocalISODate } from './utils/dates.js'
 
 const overlay = document.getElementById('leave-modal')
@@ -67,27 +67,12 @@ saveBtn.addEventListener('click', async () => {
 
   const endDate = endInput.value || startDate
   const halfDay = halfDayCheckbox.checked
-  const days = halfDay ? 0.5 : countWeekdays(startDate, endDate)
-
-  const targetEmail = personRow.style.display !== 'none'
-    ? personSelect.value
-    : currentCtx.currentUser.email
-  const targetMember = TEAM.find((m) => m.email === targetEmail)
-
-  let paidDays = days
-  let unpaidDays = 0
-
-  if (selectedType === 'personal' || selectedType === 'medical') {
-    const allowance = allowanceForMember(targetEmail, selectedType)
-    if (allowance !== null) {
-      // When editing, exclude the current leave from "used" calculation
-      const excludeId = editingLeaveId
-      const used = getUsedDays(targetEmail, selectedType, currentCtx.allLeaves || [], excludeId)
-      const available = Math.max(0, allowance - used)
-      paidDays = Math.min(days, available)
-      unpaidDays = days - paidDays
-    }
-  }
+  const targetEmail = personRow.style.display !== 'none' ? personSelect.value : currentCtx.currentUser.email
+  const targetMember = TEAM.find(m => m.email === targetEmail)
+  let split
+  try { split = proposedSplit(targetEmail, startDate, endDate, halfDay) }
+  catch (err) { alert(err.message); return }
+  const { days, paidDays, unpaidDays } = split
 
   saveBtn.disabled = true
   saveBtn.textContent = 'Saving...'
@@ -117,6 +102,7 @@ saveBtn.addEventListener('click', async () => {
     close()
   } catch (err) {
     console.error('Failed to save leave:', err)
+    summaryEl.textContent = err.message || 'Failed to save leave'
     saveBtn.disabled = false
     saveBtn.textContent = editingLeaveId ? 'Save Changes' : 'Request Leave'
   }
@@ -174,80 +160,22 @@ function close() {
   saveBtn.textContent = 'Request Leave'
 }
 
+function proposedSplit(email, startDate, endDate, halfDay) {
+  if (!getAttendanceTeam().some(m => m.email === email)) throw new Error('Leave policy does not apply to this person')
+  if (endDate < startDate) throw new Error('End date must not precede start date')
+  const id = '__preview__'
+  const candidate = { id, userEmail:email, type:selectedType, startDate, endDate, halfDay, status:'approved' }
+  const result = calculate({ userEmail:email, contracts:currentCtx.allContracts || [], holidays:currentCtx.allHolidays || [],
+    leaves:[...(currentCtx.allLeaves || []).filter(l=>l.id !== editingLeaveId), candidate], asOf:endDate })
+  const entries = result.entries.filter(e=>e.leaveId === id)
+  if(entries.some(e=>e.error)) throw new Error('Add a contract covering these dates before recording leave')
+  return entries.reduce((s,e)=>({days:s.days+e.days,paidDays:s.paidDays+e.paidDays,unpaidDays:s.unpaidDays+e.unpaidDays}),{days:0,paidDays:0,unpaidDays:0})
+}
 function updateSummary() {
-  const startDate = startInput.value
-  const endDate = endInput.value || startDate
-  if (!startDate) {
-    summaryEl.classList.add('hidden')
-    return
-  }
-
-  const halfDay = halfDayCheckbox.checked
-  const days = halfDay ? 0.5 : countWeekdays(startDate, endDate)
-
-  if (days === 0) {
-    summaryEl.innerHTML = '<span class="leave-summary-warn">No weekdays in selected range</span>'
-    summaryEl.classList.remove('hidden')
-    return
-  }
-
-  const targetEmail = personRow.style.display !== 'none'
-    ? personSelect.value
-    : currentCtx?.currentUser?.email
-
-  let html = `<strong>${days} day${days !== 1 ? 's' : ''}</strong> of ${selectedType} leave`
-
-  if (selectedType === 'personal' || selectedType === 'medical') {
-    const allowance = allowanceForMember(targetEmail, selectedType)
-    if (allowance !== null) {
-      const used = getUsedDays(targetEmail, selectedType, currentCtx?.allLeaves || [], editingLeaveId)
-      const available = Math.max(0, allowance - used)
-      const paidDays = Math.min(days, available)
-      const unpaidDays = days - paidDays
-
-      if (unpaidDays > 0) {
-        html += `<br><span class="leave-summary-warn">\u26a0 ${paidDays} paid, ${unpaidDays} unpaid (balance exceeded)</span>`
-      }
-    }
-  }
-
-  summaryEl.innerHTML = html
-  summaryEl.classList.remove('hidden')
-}
-
-function countWeekdays(startDate, endDate) {
-  let count = 0
-  const start = new Date(startDate + 'T00:00:00')
-  const end = new Date(endDate + 'T00:00:00')
-  const current = new Date(start)
-  while (current <= end) {
-    const day = current.getDay()
-    if (day !== 0 && day !== 6) count++
-    current.setDate(current.getDate() + 1)
-  }
-  return count
-}
-
-// The contract a person's balance is currently computed against.
-function currentContractFor(email) {
-  return currentContract(contractsForUser(currentCtx?.allContracts || [], email))
-}
-
-// Leave allowance for a person and leave type, scoped to their current
-// contract term: personal accrues 1/month of that contract, medical is that
-// contract's fixed pool. Returns null when there's no contract on file, so
-// callers can skip paid/unpaid splitting (no contract → no balance to enforce).
-function allowanceForMember(email, type) {
-  const contract = currentContractFor(email)
-  if (!contract) return null
-  return type === 'medical' ? medicalPoolForContract(contract) : contractMonths(contract)
-}
-
-// Days of `type` already used within the current contract term (leaves taken
-// under a prior contract or in a gap don't count).
-function getUsedDays(email, type, allLeaves, excludeId) {
-  const contract = currentContractFor(email)
-  return allLeaves
-    .filter((l) => l.userEmail === email && l.type === type && l.status === 'approved' && l.id !== excludeId && isWithinContractTerm(l.startDate, contract))
-    .reduce((sum, l) => sum + (l.halfDay ? 0.5 : countWeekdays(l.startDate, l.endDate || l.startDate)), 0)
+  if (!startInput.value || !currentCtx) { summaryEl.textContent = ''; return }
+  const email = personRow.style.display !== 'none' ? personSelect.value : currentCtx.currentUser.email
+  try {
+    const s=proposedSplit(email,startInput.value,endInput.value || startInput.value,halfDayCheckbox.checked)
+    summaryEl.textContent = `${s.days} day(s): ${s.paidDays} paid, ${s.unpaidDays} unpaid. Final deduction is reviewed at monthly close.`
+  } catch(err) { summaryEl.textContent = err.message }
 }

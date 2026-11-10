@@ -174,7 +174,7 @@ The task model was migrated from `assignee` (single string) to `assignees` (arra
 
 - **tasks** — title, description, assignees[], status, priority, clientId, projectId, deadline, notes[], createdAt, updatedAt, closedAt, createdBy
 - **standups** — userEmail, userName, yesterday, today, blockers, date
-- **clients** — name, slackChannelId (11 clients — see Clients section)
+- **clients** — name, logoUrl, defaultHourlyRate, currency, slackChannelId, slackChannelName (display only), archived (11 clients — see Clients section)
 - **projects** — name, clientId
 - **people** — name, email, role, type, clientIds[] (team members, client contacts, external people)
 - **processes** — studio process docs
@@ -371,7 +371,9 @@ External client users can log in via Google sign-in to view their org's tasks an
 
 **Firestore rules:** `isClientUser()` checks if `request.auth.token.email` exists in `clientUsers`. `clientIdForUser()` returns the clientId for a client user. Client users can only read tasks/projects matching their clientId.
 
-**Managing client users:** Team members invite client users from the Manage page → Client Users section. Each entry stores email, name, clientId, and invitedBy.
+**Managing client users:** Team members add them from the Clients page (`#/manage`) → People with access. Each entry stores email, name, clientId, and invitedBy. No email is sent. One email maps to one client (the doc ID is the email).
+
+**Clients page (`src/clients.js`):** clients are archived, never deleted, from the UI. Fields save in place. The Slack channel picker (`src/slack-channels.js`) calls the `slackChannels` function ([functions/slack-channels.cjs](functions/slack-channels.cjs), Firebase ID-token auth, needs bot scopes `channels:read` + `groups:read`) and falls back to pasting a channel link or ID if that call fails.
 
 ## Clients
 

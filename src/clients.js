@@ -1,7 +1,6 @@
 import {
   createClient,
   updateClient,
-  deleteClient,
   createProject,
   updateProject,
   deleteProject,
@@ -15,7 +14,8 @@ import {
 } from './db.js'
 import { renderMarkdown } from './markdown.js'
 import { TEAM } from './config.js'
-import { openItemIndex, clientState } from './utils/client-visibility.js'
+import { openItemIndex, clientState, isOpenItem } from './utils/client-visibility.js'
+import { openChannelPicker, loadSlackChannels, knownChannelName } from './slack-channels.js'
 
 let unsubClients = null
 let unsubProjects = null
@@ -28,15 +28,20 @@ let currentCtx = null
 // Master-detail state
 let selectedClientId = null
 let clientSearchTerm = ''
+let showArchived = false
 
 // Project-detail (within right pane) state
 let activeProjectId = null
 let projectActiveTab = 'page'
 let projectIsEditing = false
 
-// Inline-form state
-let editingClientId = null
-let editingProjectId = null
+// Inline add-row state (detail pane)
+let addingProject = false
+let addingPerson = false
+
+const CURRENCIES = ['INR', 'USD']
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const MAX_LOGO_BYTES = 10 * 1024 * 1024
 
 export function renderClients(container, ctx) {
   if (unsubClients) unsubClients()
@@ -45,24 +50,21 @@ export function renderClients(container, ctx) {
   currentCtx = ctx
   activeProjectId = null
   projectIsEditing = false
+  addingProject = false
+  addingPerson = false
 
   container.innerHTML = `
     <div class="manage-view">
-      <div class="manage-header">
-        <h2>Clients & Projects</h2>
-        <p>Manage your clients and their projects</p>
-      </div>
-
       <div class="manage-layout">
         <aside class="manage-sidebar">
-          <div class="manage-sidebar-actions">
-            <button class="btn-primary" id="add-client-btn"><i class="ph ph-plus"></i> Client</button>
+          <div class="manage-sidebar-head">
+            <h2>Clients</h2>
+            <button class="btn-primary btn-sm" id="add-client-btn"><i class="ph ph-plus"></i> New client</button>
           </div>
           <div class="manage-sidebar-search">
             <i class="ph ph-magnifying-glass"></i>
-            <input type="text" id="manage-client-search" placeholder="Search clients…" autocomplete="off">
+            <input type="text" id="manage-client-search" placeholder="Search clients…" autocomplete="off" aria-label="Search clients" value="${escHtml(clientSearchTerm)}">
           </div>
-          <div id="add-client-form" class="manage-inline-form hidden"></div>
           <div class="manage-sidebar-list" id="manage-client-list"></div>
         </aside>
 
@@ -74,9 +76,8 @@ export function renderClients(container, ctx) {
   // Real-time subscriptions
   unsubClients = subscribeToClients(ctx.db, (clients) => {
     localClients = clients
-    // Auto-select first client on initial load
-    if (!selectedClientId && localClients.length > 0) {
-      selectedClientId = localClients[0].id
+    if (!selectedClientId || !localClients.some((c) => c.id === selectedClientId)) {
+      selectedClientId = defaultClientId()
     }
     renderSidebar()
     renderDetail()
@@ -90,21 +91,154 @@ export function renderClients(container, ctx) {
 
   unsubClientUsers = subscribeToClientUsers(ctx.db, (users) => {
     localClientUsers = users
-    renderSidebar()
     renderDetail()
   })
 
-  // Search
   const searchInput = document.getElementById('manage-client-search')
   searchInput.addEventListener('input', () => {
     clientSearchTerm = searchInput.value.trim().toLowerCase()
     renderSidebar()
   })
 
-  // Add Client button
-  document.getElementById('add-client-btn').addEventListener('click', () => {
-    editingClientId = null
-    openClientForm()
+  document.getElementById('add-client-btn').addEventListener('click', openNewClientDialog)
+
+  // Resolve channel IDs to #names in the background; IDs show until it lands.
+  if (ctx.currentUser) {
+    loadSlackChannels(ctx.currentUser).then(() => { if (currentCtx === ctx) renderDetail() }).catch(() => {})
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// SHARED HELPERS
+// ─────────────────────────────────────────────────────────────
+
+function openClientIds() {
+  return openItemIndex(currentCtx?.allTasks).clientIds
+}
+
+function openTaskCount(field, id) {
+  return (currentCtx?.allTasks || []).filter((t) => t[field] === id && isOpenItem(t)).length
+}
+
+// First client to show: the first active one, else the first non-archived, else any.
+function defaultClientId() {
+  const open = openClientIds()
+  const pick = localClients.find((c) => clientState(c, open) === 'active')
+    || localClients.find((c) => !c.archived)
+    || localClients[0]
+  return pick?.id || null
+}
+
+function plural(n, word) {
+  return `${n} ${word}${n === 1 ? '' : 's'}`
+}
+
+function logoMarkup(client, cls) {
+  return client?.logoUrl
+    ? `<img class="${cls}" src="${escHtml(client.logoUrl)}" alt="">`
+    : `<span class="${cls} manage-client-logo-placeholder" aria-hidden="true">${escHtml((client?.name || '?')[0].toUpperCase())}</span>`
+}
+
+function channelLabel(id, storedName) {
+  if (!id) return ''
+  const name = knownChannelName(id) || storedName
+  return name ? `#${name}` : id
+}
+
+function currencyOptions(selected) {
+  return CURRENCIES.map((c) => `<option value="${c}"${c === selected ? ' selected' : ''}>${c}</option>`).join('')
+}
+
+function nameTaken(name, exceptId) {
+  const n = name.trim().toLowerCase()
+  return localClients.find((c) => c.id !== exceptId && c.name.trim().toLowerCase() === n)
+}
+
+function toast(message, kind = 'ok') {
+  let el = document.getElementById('manage-toast')
+  if (!el) {
+    el = document.createElement('div')
+    el.id = 'manage-toast'
+    el.className = 'manage-toast'
+    el.setAttribute('role', 'status')
+    el.setAttribute('aria-live', 'polite')
+    document.body.appendChild(el)
+  }
+  el.textContent = message
+  el.dataset.kind = kind
+  el.classList.add('show')
+  clearTimeout(el._timer)
+  el._timer = setTimeout(() => el.classList.remove('show'), kind === 'error' ? 6000 : 2600)
+}
+
+// Run a write; on failure say so instead of failing silently. Resolves true/false.
+async function attempt(fn, { ok, fail }) {
+  try {
+    await fn()
+    if (ok) toast(ok)
+    return true
+  } catch (err) {
+    console.error(fail, err)
+    toast(`${fail}. ${err?.message || 'Try again.'}`, 'error')
+    return false
+  }
+}
+
+function confirmDialog({ title, body, confirmLabel, danger = false }) {
+  return new Promise((resolve) => {
+    const previous = document.activeElement
+    const overlay = document.createElement('div')
+    overlay.className = 'modal-overlay manage-overlay'
+    overlay.innerHTML = `
+      <div class="modal manage-confirm" role="alertdialog" aria-modal="true" aria-labelledby="manage-confirm-title">
+        <div class="modal-body">
+          <h3 class="modal-title" id="manage-confirm-title">${escHtml(title)}</h3>
+          <p class="manage-confirm-body">${escHtml(body)}</p>
+        </div>
+        <div class="modal-footer">
+          <div class="modal-footer-right">
+            <button class="btn-ghost" data-act="cancel">Cancel</button>
+            <button class="${danger ? 'btn-primary manage-btn-danger' : 'btn-primary'}" data-act="confirm">${escHtml(confirmLabel)}</button>
+          </div>
+        </div>
+      </div>
+    `
+    const done = (result) => {
+      overlay.remove()
+      previous?.focus?.()
+      resolve(result)
+    }
+    overlay.addEventListener('mousedown', (e) => { if (e.target === overlay) done(false) })
+    overlay.addEventListener('keydown', (e) => { if (e.key === 'Escape') done(false) })
+    overlay.querySelector('[data-act="cancel"]').addEventListener('click', () => done(false))
+    overlay.querySelector('[data-act="confirm"]').addEventListener('click', () => done(true))
+    document.body.appendChild(overlay)
+    overlay.querySelector('[data-act="cancel"]').focus()
+  })
+}
+
+function validLogoFile(file) {
+  if (!file) return false
+  if (!file.type?.startsWith('image/')) { toast('That file isn\'t an image.', 'error'); return false }
+  if (file.size > MAX_LOGO_BYTES) { toast('That image is over 10 MB. Pick a smaller one.', 'error'); return false }
+  return true
+}
+
+// Make an element a logo target: click opens the file picker, an image can be dropped on it.
+function wireLogoTarget(button, fileInput, onFile) {
+  button.addEventListener('click', () => fileInput.click())
+  fileInput.addEventListener('change', () => {
+    const file = fileInput.files[0]
+    fileInput.value = ''
+    if (validLogoFile(file)) onFile(file)
+  })
+  button.addEventListener('dragover', (e) => { e.preventDefault(); button.classList.add('drag-over') })
+  button.addEventListener('dragleave', () => button.classList.remove('drag-over'))
+  button.addEventListener('drop', (e) => {
+    e.preventDefault()
+    button.classList.remove('drag-over')
+    const file = e.dataTransfer?.files?.[0]
+    if (validLogoFile(file)) onFile(file)
   })
 }
 
@@ -116,64 +250,74 @@ function renderSidebar() {
   const list = document.getElementById('manage-client-list')
   if (!list) return
 
-  const { clientIds: openClientIds } = openItemIndex(currentCtx?.allTasks)
-  // Active first, then dormant ("Inactive"), then archived — preserving the
-  // name order within each group (localClients arrives ordered by name).
-  const rank = (c) => {
-    const s = clientState(c, openClientIds)
-    return s === 'active' ? 0 : s === 'inactive' ? 1 : 2
-  }
-
+  const open = openClientIds()
   const matched = clientSearchTerm
     ? localClients.filter((c) => c.name.toLowerCase().includes(clientSearchTerm))
     : localClients
-  const filtered = [...matched].sort((a, b) => rank(a) - rank(b))
 
-  if (filtered.length === 0) {
-    list.innerHTML = `
-      <div class="manage-sidebar-empty">
-        ${clientSearchTerm ? 'No matches' : 'No clients yet'}
-      </div>
-    `
+  if (matched.length === 0) {
+    list.innerHTML = clientSearchTerm
+      ? `<div class="manage-sidebar-empty">No client matches “${escHtml(clientSearchTerm)}”.</div>`
+      : `<div class="manage-sidebar-empty">No clients yet.<br>Add your first one with <strong>New client</strong>.</div>`
     return
   }
 
-  list.innerHTML = filtered.map((c) => {
+  const groups = { active: [], inactive: [], archived: [] }
+  for (const c of matched) groups[clientState(c, open)].push(c)
+
+  const row = (c) => {
+    const state = clientState(c, open)
     const projectCount = localProjects.filter((p) => p.clientId === c.id).length
-    const userCount = localClientUsers.filter((u) => u.clientId === c.id).length
-    const hasSlack = !!c.slackChannelId
-    const logo = c.logoUrl
-      ? `<img class="manage-client-logo" src="${c.logoUrl}" alt="${escHtml(c.name)}">`
-      : `<span class="manage-client-logo manage-client-logo-placeholder">${escHtml(c.name[0] || '?')}</span>`
-    const isActive = c.id === selectedClientId && !activeProjectId
-    const state = clientState(c, openClientIds)
-    const badge = state === 'archived'
-      ? '<span class="manage-state-badge archived">Archived</span>'
-      : state === 'inactive'
-        ? '<span class="manage-state-badge inactive">Inactive</span>'
-        : ''
+    const tasks = openTaskCount('clientId', c.id)
+    const meta = [
+      projectCount ? plural(projectCount, 'project') : 'No projects',
+      tasks ? `${tasks} open` : '',
+    ].filter(Boolean).join(' · ')
+    const isSelected = c.id === selectedClientId
     return `
-      <button class="manage-client-row${isActive ? ' active' : ''}${state !== 'active' ? ' dimmed' : ''}" data-id="${c.id}">
-        ${logo}
-        <div class="manage-client-row-info">
-          <span class="manage-client-row-name">${escHtml(c.name)}${badge}</span>
-          <span class="manage-client-row-meta">
-            ${projectCount} project${projectCount !== 1 ? 's' : ''}
-            ${userCount > 0 ? ` · ${userCount} user${userCount !== 1 ? 's' : ''}` : ''}
-          </span>
-        </div>
-        ${hasSlack ? `<i class="ph-fill ph-hash manage-slack-indicator" title="Slack channel set"></i>` : ''}
+      <button class="manage-client-row${isSelected ? ' active' : ''}${state !== 'active' ? ' dimmed' : ''}" data-id="${c.id}"${isSelected ? ' aria-current="true"' : ''}>
+        ${logoMarkup(c, 'manage-client-logo')}
+        <span class="manage-client-row-info">
+          <span class="manage-client-row-name">${escHtml(c.name)}</span>
+          <span class="manage-client-row-meta">${meta}</span>
+        </span>
       </button>
     `
-  }).join('')
+  }
 
-  list.querySelectorAll('.manage-client-row').forEach((row) => {
-    row.addEventListener('click', () => {
-      selectedClientId = row.dataset.id
+  // While searching, or when the selected client is archived, archived rows are shown.
+  const selectedIsArchived = groups.archived.some((c) => c.id === selectedClientId)
+  const archivedOpen = showArchived || !!clientSearchTerm || selectedIsArchived
+
+  let html = groups.active.map(row).join('')
+  if (groups.inactive.length) {
+    html += `<div class="manage-sidebar-group" title="Clients with no open tasks. They are hidden from the board until new work is added.">No open work</div>`
+    html += groups.inactive.map(row).join('')
+  }
+  if (groups.archived.length) {
+    html += `
+      <button class="manage-sidebar-group manage-archived-toggle" id="manage-archived-toggle" aria-expanded="${archivedOpen}">
+        <i class="ph ${archivedOpen ? 'ph-caret-down' : 'ph-caret-right'}"></i> Archived <span class="manage-section-count">${groups.archived.length}</span>
+      </button>
+    `
+    if (archivedOpen) html += groups.archived.map(row).join('')
+  }
+  list.innerHTML = html
+
+  list.querySelectorAll('.manage-client-row').forEach((el) => {
+    el.addEventListener('click', () => {
+      selectedClientId = el.dataset.id
       activeProjectId = null
+      projectIsEditing = false
+      addingProject = false
+      addingPerson = false
       renderSidebar()
       renderDetail()
     })
+  })
+  document.getElementById('manage-archived-toggle')?.addEventListener('click', () => {
+    showArchived = !archivedOpen
+    renderSidebar()
   })
 }
 
@@ -181,139 +325,354 @@ function renderSidebar() {
 // DETAIL PANE
 // ─────────────────────────────────────────────────────────────
 
+// Subscriptions re-render the whole pane, including while someone is typing in
+// it. Carry the focused field and any unsaved add-row text across the render.
+function snapshotPane(pane) {
+  const active = pane.contains(document.activeElement) ? document.activeElement : null
+  const drafts = {}
+  pane.querySelectorAll('[data-draft]').forEach((el) => { if (el.id) drafts[el.id] = el.value })
+  return {
+    key: pane.dataset.key || '',
+    drafts,
+    focusId: active?.id || '',
+    focusValue: active && 'value' in active ? active.value : null,
+    selection: active && typeof active.selectionStart === 'number' ? [active.selectionStart, active.selectionEnd] : null,
+  }
+}
+
+function restorePane(pane, snap) {
+  if (!snap.key || pane.dataset.key !== snap.key) return
+  for (const [id, value] of Object.entries(snap.drafts)) {
+    const el = document.getElementById(id)
+    if (el) el.value = value
+  }
+  if (!snap.focusId) return
+  const el = document.getElementById(snap.focusId)
+  if (!el || !pane.contains(el)) return
+  if (snap.focusValue != null && el.tagName !== 'SELECT' && el.tagName !== 'BUTTON') el.value = snap.focusValue
+  el.focus()
+  if (snap.selection) { try { el.setSelectionRange(...snap.selection) } catch (_) { /* number inputs */ } }
+}
+
 function renderDetail() {
   const pane = document.getElementById('manage-detail')
   if (!pane) return
+  const snap = snapshotPane(pane)
+  renderDetailInner(pane)
+  restorePane(pane, snap)
+}
 
+function renderDetailInner(pane) {
   // Project detail overrides client detail when active
   if (activeProjectId) {
     const project = localProjects.find((p) => p.id === activeProjectId)
     if (project) {
+      pane.dataset.key = `project:${project.id}`
       renderProjectDetail(pane, project)
       return
     }
     activeProjectId = null
   }
 
-  if (!selectedClientId) {
-    pane.innerHTML = `
-      <div class="manage-detail-empty">
-        <i class="ph ph-users-three"></i>
-        <h3>Pick a client</h3>
-        <p>Select a client from the sidebar to manage its projects and team access.</p>
-      </div>
-    `
-    return
-  }
-
   const client = localClients.find((c) => c.id === selectedClientId)
   if (!client) {
-    // Selected client was deleted — fall back
-    selectedClientId = localClients[0]?.id || null
-    renderSidebar()
-    renderDetail()
+    pane.dataset.key = ''
+    const none = localClients.length === 0
+    pane.innerHTML = `
+      <div class="manage-detail-empty">
+        <i class="ph ph-buildings"></i>
+        <h3>${none ? 'Add your first client' : 'Pick a client'}</h3>
+        <p>${none
+          ? 'A client holds its projects, its Slack channel and the people on their side who can sign in.'
+          : 'Select a client on the left to see its projects and who has access.'}</p>
+        ${none ? '<button class="btn-primary" id="empty-add-client"><i class="ph ph-plus"></i> New client</button>' : ''}
+      </div>
+    `
+    document.getElementById('empty-add-client')?.addEventListener('click', openNewClientDialog)
     return
   }
 
+  pane.dataset.key = `client:${client.id}`
   renderClientDetail(pane, client)
 }
 
 function renderClientDetail(pane, client) {
+  const db = currentCtx.db
   const projects = localProjects.filter((p) => p.clientId === client.id)
   const users = localClientUsers.filter((u) => u.clientId === client.id)
+  const state = clientState(client, openClientIds())
+  const tasks = openTaskCount('clientId', client.id)
+  const currency = client.currency || 'INR'
+  const slackText = channelLabel(client.slackChannelId, client.slackChannelName)
+  const sharedText = channelLabel(client.clientSharedChannelId, client.clientSharedChannelName)
+  const defaultOwner = client.defaultOwner || ''
 
-  const logo = client.logoUrl
-    ? `<img class="manage-detail-logo" src="${client.logoUrl}" alt="${escHtml(client.name)}">`
-    : `<span class="manage-detail-logo manage-client-logo-placeholder">${escHtml(client.name[0] || '?')}</span>`
-
-  const rateLabel = client.defaultHourlyRate
-    ? `${escHtml(client.currency || 'INR')} ${client.defaultHourlyRate}/hr`
-    : 'No default rate'
-  const slackLabel = client.slackChannelId
-    ? `<code>${escHtml(client.slackChannelId)}</code>`
-    : '<span class="muted">Not set</span>'
-
-  const { clientIds: openClientIds } = openItemIndex(currentCtx?.allTasks)
-  const state = clientState(client, openClientIds)
-  const stateChip = state === 'archived'
-    ? '<span class="manage-chip manage-chip-archived"><i class="ph ph-archive"></i> Archived</span>'
-    : state === 'inactive'
-      ? '<span class="manage-chip manage-chip-inactive"><i class="ph ph-moon"></i> Inactive · no open items</span>'
-      : ''
+  const summary = [plural(projects.length, 'project'), tasks ? plural(tasks, 'open task') : 'no open tasks'].join(' · ')
 
   pane.innerHTML = `
     <div class="manage-detail-header">
-      ${logo}
+      <div class="manage-logo-wrap">
+        <button class="manage-logo-btn" id="client-logo-btn" title="${client.logoUrl ? 'Change logo' : 'Add a logo'}" aria-label="${client.logoUrl ? 'Change logo' : 'Add a logo'} for ${escHtml(client.name)}">
+          ${logoMarkup(client, 'manage-detail-logo')}
+          <span class="manage-logo-overlay" aria-hidden="true"><i class="ph ph-camera"></i></span>
+        </button>
+        ${client.logoUrl ? '<button class="manage-logo-remove" id="client-logo-remove" title="Remove logo" aria-label="Remove logo"><i class="ph ph-x"></i></button>' : ''}
+        <input type="file" id="client-logo-input" accept="image/*" class="hidden">
+      </div>
       <div class="manage-detail-identity">
-        <h2 class="manage-detail-name">${escHtml(client.name)}</h2>
-        <div class="manage-detail-chips">
-          ${stateChip}
-          <span class="manage-chip"><i class="ph ph-currency-circle-dollar"></i> ${rateLabel}</span>
-          <span class="manage-chip"><i class="ph ph-hash"></i> ${slackLabel}</span>
-        </div>
+        <input type="text" id="client-name-input" class="manage-name-input" value="${escHtml(client.name)}" aria-label="Client name" title="Click to rename" autocomplete="off" spellcheck="false">
+        <div class="manage-detail-sub">${summary}</div>
       </div>
       <div class="manage-detail-actions">
-        <button class="btn-ghost" id="archive-client-btn"><i class="ph ${client.archived ? 'ph-arrow-counter-clockwise' : 'ph-archive'}"></i> ${client.archived ? 'Unarchive' : 'Archive'}</button>
-        <button class="btn-ghost" id="edit-client-btn"><i class="ph ph-pencil-simple"></i> Edit</button>
-        <button class="btn-ghost danger" id="delete-client-btn" title="Delete client" aria-label="Delete client"><i class="ph ph-trash"></i></button>
+        ${client.archived ? '' : '<button class="btn-ghost" id="archive-client-btn"><i class="ph ph-archive"></i> Archive</button>'}
       </div>
     </div>
 
-    <div id="edit-client-form" class="manage-inline-form hidden"></div>
+    ${client.archived ? `
+      <div class="manage-banner">
+        <i class="ph ph-archive"></i>
+        <span><strong>Archived.</strong> Hidden from the board, backlog and task pickers. Its projects, tasks and timesheets are kept.</span>
+        <button class="btn-ghost" id="archive-client-btn">Unarchive</button>
+      </div>` : state === 'inactive' ? `
+      <div class="manage-banner manage-banner-quiet">
+        <i class="ph ph-moon"></i>
+        <span>No open tasks, so this client is hidden from the board until new work is added.</span>
+      </div>` : ''}
+
+    <div class="manage-fields">
+      <div class="manage-field">
+        <label class="manage-field-label" for="client-rate">Default hourly rate</label>
+        <div class="manage-rate-control">
+          <select id="client-currency" class="form-select" aria-label="Currency">${currencyOptions(currency)}</select>
+          <input type="number" id="client-rate" class="form-input" min="0" step="1" inputmode="decimal" placeholder="Not set" value="${client.defaultHourlyRate || ''}">
+        </div>
+        <p class="manage-field-hint">New projects start at this rate. Existing projects keep their own.</p>
+      </div>
+      <div class="manage-field">
+        <span class="manage-field-label" id="client-slack-label">Slack channel</span>
+        <button class="manage-channel-btn${slackText ? '' : ' empty'}" id="client-slack-btn" aria-haspopup="dialog" aria-expanded="false" aria-labelledby="client-slack-label client-slack-btn">
+          <i class="ph ph-slack-logo"></i>
+          <span class="manage-channel-text">${slackText ? escHtml(slackText) : 'Choose a channel'}</span>
+          <i class="ph ph-caret-down"></i>
+        </button>
+        <p class="manage-field-hint">Task updates for this client are posted here.</p>
+      </div>
+      <div class="manage-field">
+        <label class="manage-field-label" for="client-default-owner">Default owner</label>
+        <select id="client-default-owner" class="form-select">
+          <option value="">None</option>
+          ${TEAM.map((m) => `<option value="${escHtml(m.email)}"${m.email === defaultOwner ? ' selected' : ''}>${escHtml(m.name)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="manage-field">
+        <span class="manage-field-label" id="client-shared-label">Channel shared with the client</span>
+        <button class="manage-channel-btn${sharedText ? '' : ' empty'}" id="client-shared-btn" aria-haspopup="dialog" aria-expanded="false" aria-labelledby="client-shared-label client-shared-btn">
+          <i class="ph ph-slack-logo"></i>
+          <span class="manage-channel-text">${sharedText ? escHtml(sharedText) : 'Choose a channel'}</span>
+          <i class="ph ph-caret-down"></i>
+        </button>
+        <p class="manage-field-hint">The Slack channel the client is in. Asterisk may read it.</p>
+      </div>
+    </div>
 
     <div class="manage-section">
       <div class="manage-section-header">
         <h3 class="manage-section-title">Projects <span class="manage-section-count">${projects.length}</span></h3>
-        <button class="btn-primary btn-sm" id="add-project-btn"><i class="ph ph-plus"></i> Project</button>
+        <button class="btn-ghost btn-sm" id="add-project-btn"><i class="ph ph-plus"></i> Add project</button>
       </div>
-      <div id="add-project-form" class="manage-inline-form hidden"></div>
+      <form id="add-project-form" class="manage-add-row${addingProject ? '' : ' hidden'}" novalidate>
+        <input type="text" id="pf-name" class="form-input" data-draft placeholder="Project name, e.g. Brand identity" autocomplete="off" aria-label="Project name">
+        <button type="submit" class="btn-primary">Add</button>
+        <button type="button" class="btn-ghost" id="pf-cancel">Done</button>
+      </form>
       <div class="manage-rows" id="projects-list"></div>
     </div>
 
     <div class="manage-section">
       <div class="manage-section-header">
-        <h3 class="manage-section-title">Client Users <span class="manage-section-count">${users.length}</span></h3>
-        <button class="btn-primary btn-sm" id="add-cu-btn"><i class="ph ph-plus"></i> Invite</button>
+        <h3 class="manage-section-title">People with access <span class="manage-section-count">${users.length}</span></h3>
+        <button class="btn-ghost btn-sm" id="add-cu-btn"><i class="ph ph-plus"></i> Add person</button>
       </div>
-      <div id="add-cu-form" class="manage-inline-form hidden"></div>
+      <p class="manage-section-hint">People on the client's side who can sign in and see this client's board, timeline and timesheets.</p>
+      <form id="add-cu-form" class="manage-add-row manage-add-person${addingPerson ? '' : ' hidden'}" novalidate>
+        <input type="text" id="cuf-name" class="form-input" data-draft placeholder="Name" autocomplete="off" aria-label="Name">
+        <input type="email" id="cuf-email" class="form-input" data-draft placeholder="Google account email" autocomplete="off" aria-label="Email">
+        <button type="submit" class="btn-primary">Give access</button>
+        <button type="button" class="btn-ghost" id="cuf-cancel">Cancel</button>
+        <p class="manage-form-note" id="cuf-note">No email is sent. Tell them to sign in at work.publicknowledge.co with this Google account.</p>
+      </form>
       <div class="manage-rows" id="client-users-list"></div>
     </div>
   `
 
-  // Archive / unarchive client. Archived clients drop off every working view
-  // (board, backlog, pickers, references filter) but keep their data and stay
-  // visible here, dimmed. Toggling re-renders via the clients subscription.
-  document.getElementById('archive-client-btn').addEventListener('click', async () => {
-    await updateClient(currentCtx.db, client.id, { archived: !client.archived })
+  // ── Logo: click or drop to change, × to remove ──
+  const logoBtn = document.getElementById('client-logo-btn')
+  wireLogoTarget(logoBtn, document.getElementById('client-logo-input'), async (file) => {
+    logoBtn.classList.add('busy')
+    const done = await attempt(async () => {
+      const url = await uploadClientLogo(file, client.id)
+      await updateClient(db, client.id, { logoUrl: url })
+    }, { ok: 'Logo updated', fail: 'Couldn\'t update the logo' })
+    if (!done) logoBtn.classList.remove('busy')
+  })
+  document.getElementById('client-logo-remove')?.addEventListener('click', () => {
+    attempt(() => updateClient(db, client.id, { logoUrl: '' }), { ok: 'Logo removed', fail: 'Couldn\'t remove the logo' })
   })
 
-  // Edit client
-  document.getElementById('edit-client-btn').addEventListener('click', () => {
-    editingClientId = client.id
-    openClientForm(client)
+  // ── Name: edit in place ──
+  const nameInput = document.getElementById('client-name-input')
+  nameInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); nameInput.blur() }
+    if (e.key === 'Escape') { nameInput.value = client.name; nameInput.blur() }
   })
-
-  // Delete client
-  document.getElementById('delete-client-btn').addEventListener('click', async () => {
-    if (confirm(`Delete client "${client.name}"? This won't delete associated tasks.`)) {
-      await deleteClient(currentCtx.db, client.id)
-      selectedClientId = null
+  nameInput.addEventListener('blur', () => {
+    const next = nameInput.value.trim()
+    if (!next || next === client.name) { nameInput.value = client.name; return }
+    if (nameTaken(next, client.id)) {
+      toast(`There's already a client called “${next}”.`, 'error')
+      nameInput.value = client.name
+      return
     }
+    attempt(() => updateClient(db, client.id, { name: next }), { ok: 'Renamed', fail: 'Couldn\'t rename the client' })
   })
 
-  // Add project
+  // ── Rate + currency: save on change ──
+  const rateInput = document.getElementById('client-rate')
+  const currencySelect = document.getElementById('client-currency')
+  const saveRate = () => {
+    const rate = Math.max(0, parseFloat(rateInput.value) || 0)
+    const cur = currencySelect.value
+    if (rate === (client.defaultHourlyRate || 0) && cur === currency) return
+    attempt(() => updateClient(db, client.id, { defaultHourlyRate: rate, currency: cur }), { ok: 'Rate saved', fail: 'Couldn\'t save the rate' })
+  }
+  rateInput.addEventListener('change', saveRate)
+  rateInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') rateInput.blur() })
+  currencySelect.addEventListener('change', saveRate)
+
+  // ── Slack channel ──
+  const slackBtn = document.getElementById('client-slack-btn')
+  slackBtn.addEventListener('click', () => {
+    openChannelPicker(slackBtn, {
+      currentUser: currentCtx.currentUser,
+      value: client.slackChannelId || '',
+      onPick: (ch) => saveChannel((data) => updateClient(db, client.id, data), ch),
+    })
+  })
+
+  const sharedBtn = document.getElementById('client-shared-btn')
+  sharedBtn.addEventListener('click', () => {
+    openChannelPicker(sharedBtn, {
+      currentUser: currentCtx.currentUser,
+      value: client.clientSharedChannelId || '',
+      onPick: (ch) => saveChannel((data) => updateClient(db, client.id, data), ch, {
+        idField: 'clientSharedChannelId', nameField: 'clientSharedChannelName',
+        what: 'Shared channel', needsBot: 'so Asterisk can read it',
+      }),
+    })
+  })
+
+  // ── Default owner ──
+  const ownerSelect = document.getElementById('client-default-owner')
+  ownerSelect.addEventListener('change', () => {
+    attempt(() => updateClient(db, client.id, { defaultOwner: ownerSelect.value }), { ok: 'Default owner saved', fail: 'Couldn\'t save the default owner' })
+  })
+
+  // ── Archive / unarchive. Reversible, so no confirmation — just say what happened. ──
+  document.getElementById('archive-client-btn')?.addEventListener('click', () => {
+    const archiving = !client.archived
+    attempt(() => updateClient(db, client.id, { archived: archiving }), {
+      ok: archiving ? `${client.name} archived` : `${client.name} is back in use`,
+      fail: archiving ? 'Couldn\'t archive the client' : 'Couldn\'t unarchive the client',
+    })
+  })
+
+  // ── Add project (stays open so several can be added in a row) ──
+  const projectForm = document.getElementById('add-project-form')
+  const projectName = document.getElementById('pf-name')
   document.getElementById('add-project-btn').addEventListener('click', () => {
-    editingProjectId = null
-    openProjectForm(null, client)
+    addingProject = true
+    projectForm.classList.remove('hidden')
+    projectName.focus()
+  })
+  const closeProjectForm = () => {
+    addingProject = false
+    projectName.value = ''
+    projectForm.classList.add('hidden')
+  }
+  document.getElementById('pf-cancel').addEventListener('click', closeProjectForm)
+  projectName.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeProjectForm() })
+  projectForm.addEventListener('submit', async (e) => {
+    e.preventDefault()
+    const name = projectName.value.trim()
+    if (!name) { projectName.focus(); return }
+    if (projects.some((p) => p.name.trim().toLowerCase() === name.toLowerCase())) {
+      toast(`${client.name} already has a project called “${name}”.`, 'error')
+      return
+    }
+    projectName.value = ''
+    const done = await attempt(() => createProject(db, {
+      name, clientId: client.id, hourlyRate: client.defaultHourlyRate || 0, currency,
+    }), { ok: `Added “${name}”`, fail: 'Couldn\'t add the project' })
+    const field = document.getElementById('pf-name')
+    if (field) { if (!done) field.value = name; field.focus() }
   })
 
-  // Add client user
+  // ── Add person ──
+  const personForm = document.getElementById('add-cu-form')
+  const personNote = document.getElementById('cuf-note')
+  const personNoteDefault = personNote.textContent
+  const setPersonError = (msg) => {
+    personNote.textContent = msg || personNoteDefault
+    personNote.classList.toggle('error', !!msg)
+  }
   document.getElementById('add-cu-btn').addEventListener('click', () => {
-    openClientUserForm(client)
+    addingPerson = true
+    personForm.classList.remove('hidden')
+    document.getElementById('cuf-name').focus()
+  })
+  const closePersonForm = () => {
+    addingPerson = false
+    personForm.reset()
+    setPersonError('')
+    personForm.classList.add('hidden')
+  }
+  document.getElementById('cuf-cancel').addEventListener('click', closePersonForm)
+  personForm.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePersonForm() })
+  personForm.addEventListener('submit', async (e) => {
+    e.preventDefault()
+    const name = document.getElementById('cuf-name').value.trim()
+    const email = document.getElementById('cuf-email').value.trim().toLowerCase()
+    if (!name) { setPersonError('Add their name.'); document.getElementById('cuf-name').focus(); return }
+    if (!EMAIL_RE.test(email)) { setPersonError('Enter a full email address, like sam@client.com.'); document.getElementById('cuf-email').focus(); return }
+    if (email.endsWith('@publicknowledge.co')) { setPersonError('Studio accounts already have full access.'); return }
+    // clientUsers is keyed by email: saving would silently move them to this client.
+    const existing = localClientUsers.find((u) => u.email === email)
+    if (existing) {
+      const other = localClients.find((c) => c.id === existing.clientId)
+      setPersonError(existing.clientId === client.id
+        ? `${email} already has access.`
+        : `${email} already has access to ${other?.name || 'another client'}. One email can belong to one client. Remove it there first.`)
+      return
+    }
+    const done = await attempt(() => createClientUser(db, email, {
+      name, clientId: client.id, invitedBy: currentCtx.currentUser?.email || '',
+    }), { ok: `${name} can now sign in`, fail: 'Couldn\'t give access' })
+    if (done) closePersonForm()
   })
 
   renderProjectsList(projects, client)
-  renderClientUsersList(users)
+  renderClientUsersList(users, client)
+}
+
+// Save a picked channel (or '' to clear) through `write`, then say what happened.
+async function saveChannel(write, ch, { idField = 'slackChannelId', nameField = 'slackChannelName', what = 'Slack channel', needsBot = 'so updates can post' } = {}) {
+  const done = await attempt(() => write({ [idField]: ch.id, [nameField]: ch.name }), {
+    fail: `Couldn't save the ${what.toLowerCase()}`,
+  })
+  if (!done) return
+  if (!ch.id) toast(`${what} cleared`)
+  else if (!ch.isMember) toast(`Saved, but the bot isn't in #${ch.name} yet. Invite it there ${needsBot}.`, 'error')
+  else toast(`${what} set to ${ch.name ? '#' + ch.name : ch.id}`)
 }
 
 function renderProjectsList(projects, client) {
@@ -321,72 +680,45 @@ function renderProjectsList(projects, client) {
   if (!list) return
 
   if (projects.length === 0) {
-    list.innerHTML = `<div class="manage-empty-row">No projects yet.</div>`
+    list.innerHTML = `<div class="manage-empty-row">No projects yet. Tasks are filed under a project, so add one to start.</div>`
     return
   }
 
   list.innerHTML = projects.map((p) => {
     const pRate = p.hourlyRate ?? client?.defaultHourlyRate ?? 0
     const pCurrency = p.currency || client?.currency || 'INR'
-    const rateLabel = pRate ? `${pCurrency} ${pRate}/hr` : ''
-    const hasSlack = !!p.slackChannelId
+    const tasks = openTaskCount('projectId', p.id)
+    const meta = [
+      tasks ? plural(tasks, 'open task') : 'No open tasks',
+      pRate ? `${escHtml(pCurrency)} ${pRate}/hr` : '',
+      p.slackChannelId ? escHtml(channelLabel(p.slackChannelId, p.slackChannelName)) : '',
+    ].filter(Boolean).join(' · ')
     return `
-      <div class="manage-row project-row" data-id="${p.id}">
-        <div class="manage-row-main">
+      <button class="manage-row project-row" data-id="${p.id}">
+        <span class="manage-row-main">
           <span class="manage-row-name">${escHtml(p.name)}</span>
-          <span class="manage-row-meta">
-            ${rateLabel}
-            ${hasSlack ? `${rateLabel ? ' · ' : ''}<i class="ph ph-hash"></i> own channel` : ''}
-          </span>
-        </div>
-        <div class="manage-row-actions">
-          <button class="btn-ghost project-edit" data-id="${p.id}" title="Edit project" aria-label="Edit project"><i class="ph ph-pencil-simple"></i></button>
-          <button class="btn-ghost danger project-delete" data-id="${p.id}" data-name="${escHtml(p.name)}" title="Delete project" aria-label="Delete project"><i class="ph ph-trash"></i></button>
-        </div>
+          <span class="manage-row-meta">${meta}</span>
+        </span>
         <i class="ph ph-caret-right manage-row-chevron" aria-hidden="true"></i>
-      </div>
+      </button>
     `
   }).join('')
 
-  // Row click → project detail
   list.querySelectorAll('.project-row').forEach((row) => {
-    row.addEventListener('click', (e) => {
-      if (e.target.closest('button')) return
-      const project = projects.find((p) => p.id === row.dataset.id)
-      if (project) {
-        activeProjectId = project.id
-        projectActiveTab = 'page'
-        renderSidebar()
-        renderDetail()
-      }
-    })
-  })
-
-  list.querySelectorAll('.project-edit').forEach((btn) => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation()
-      const project = projects.find((p) => p.id === btn.dataset.id)
-      editingProjectId = project.id
-      openProjectForm(project, client)
-    })
-  })
-
-  list.querySelectorAll('.project-delete').forEach((btn) => {
-    btn.addEventListener('click', async (e) => {
-      e.stopPropagation()
-      if (confirm(`Delete project "${btn.dataset.name}"? This won't delete associated tasks.`)) {
-        await deleteProject(currentCtx.db, btn.dataset.id)
-      }
+    row.addEventListener('click', () => {
+      activeProjectId = row.dataset.id
+      projectActiveTab = 'page'
+      renderDetail()
     })
   })
 }
 
-function renderClientUsersList(users) {
+function renderClientUsersList(users, client) {
   const list = document.getElementById('client-users-list')
   if (!list) return
 
   if (users.length === 0) {
-    list.innerHTML = `<div class="manage-empty-row">No client users yet. Invite someone to give them access.</div>`
+    list.innerHTML = `<div class="manage-empty-row">Nobody at ${escHtml(client.name)} can sign in yet.</div>`
     return
   }
 
@@ -394,278 +726,229 @@ function renderClientUsersList(users) {
     const inviter = TEAM.find((m) => m.email === cu.invitedBy)
     return `
       <div class="manage-row" data-email="${escHtml(cu.email)}">
+        <span class="manage-person-avatar" aria-hidden="true">${escHtml((cu.name || cu.email || '?')[0].toUpperCase())}</span>
         <div class="manage-row-main">
           <span class="manage-row-name">${escHtml(cu.name)}</span>
-          <span class="manage-row-meta">${escHtml(cu.email)}${inviter ? ' · Invited by ' + escHtml(inviter.name) : ''}</span>
+          <span class="manage-row-meta">${escHtml(cu.email)}${inviter ? ' · added by ' + escHtml(inviter.name) : ''}</span>
         </div>
-        <div class="manage-row-actions">
-          <button class="btn-ghost danger cu-delete" data-email="${escHtml(cu.email)}" data-name="${escHtml(cu.name)}" title="Remove access" aria-label="Remove access"><i class="ph ph-trash"></i></button>
-        </div>
+        <button class="btn-ghost btn-sm cu-delete" data-email="${escHtml(cu.email)}" data-name="${escHtml(cu.name)}">Remove access</button>
       </div>
     `
   }).join('')
 
   list.querySelectorAll('.cu-delete').forEach((btn) => {
     btn.addEventListener('click', async () => {
-      if (confirm(`Remove access for "${btn.dataset.name}"?`)) {
-        await deleteClientUser(currentCtx.db, btn.dataset.email)
-      }
+      const who = btn.dataset.name || btn.dataset.email
+      const yes = await confirmDialog({
+        title: `Remove ${who}'s access?`,
+        body: `${btn.dataset.email} will no longer be able to sign in and see ${client.name}'s work. You can add them again later.`,
+        confirmLabel: 'Remove access',
+        danger: true,
+      })
+      if (yes) attempt(() => deleteClientUser(currentCtx.db, btn.dataset.email), { ok: `${who} no longer has access`, fail: 'Couldn\'t remove access' })
     })
   })
 }
 
 // ─────────────────────────────────────────────────────────────
-// INLINE FORMS
+// NEW CLIENT DIALOG
 // ─────────────────────────────────────────────────────────────
 
-function openClientForm(existing) {
-  // Add → sidebar slot (add-client-form). Edit → detail-pane slot (edit-client-form).
-  const targetId = existing ? 'edit-client-form' : 'add-client-form'
-  const otherId = existing ? 'add-client-form' : 'edit-client-form'
-  const form = document.getElementById(targetId)
-  if (!form) return
-  const otherForm = document.getElementById(otherId)
-  if (otherForm) otherForm.classList.add('hidden')
+function openNewClientDialog() {
+  if (document.getElementById('new-client-overlay')) return
+  const previous = document.activeElement
+  let logoFile = null
+  let logoPreviewUrl = ''
+  let channel = { id: '', name: '' }
+  let saving = false
 
-  const name = existing?.name || ''
-  const rate = existing?.defaultHourlyRate || ''
-  const currency = existing?.currency || 'INR'
-  const slack = existing?.slackChannelId || ''
-  const sharedChannel = existing?.clientSharedChannelId || ''
-  const defaultOwner = existing?.defaultOwner || ''
-  const logoUrl = existing?.logoUrl || ''
+  const overlay = document.createElement('div')
+  overlay.className = 'modal-overlay manage-overlay'
+  overlay.id = 'new-client-overlay'
+  overlay.innerHTML = `
+    <div class="modal manage-dialog" role="dialog" aria-modal="true" aria-labelledby="nc-title">
+      <div class="modal-header">
+        <h3 class="modal-title" id="nc-title">New client</h3>
+        <button type="button" class="modal-close" id="nc-close" aria-label="Close">&times;</button>
+      </div>
+      <form class="modal-body" id="nc-form" novalidate>
+        <div class="nc-identity">
+          <div class="manage-logo-wrap">
+            <button type="button" class="manage-logo-btn nc-logo-btn" id="nc-logo-btn" aria-label="Add a logo">
+              <span class="nc-logo-empty" id="nc-logo-empty"><i class="ph ph-image"></i><span>Logo</span></span>
+              <img class="manage-detail-logo hidden" id="nc-logo-preview" alt="">
+              <span class="manage-logo-overlay" aria-hidden="true"><i class="ph ph-camera"></i></span>
+            </button>
+            <button type="button" class="manage-logo-remove hidden" id="nc-logo-remove" title="Remove logo" aria-label="Remove logo"><i class="ph ph-x"></i></button>
+            <input type="file" id="nc-logo-input" accept="image/*" class="hidden">
+          </div>
+          <div class="manage-field nc-name-field">
+            <label class="manage-field-label" for="nc-name">Client name</label>
+            <input type="text" id="nc-name" class="form-input" placeholder="e.g. Brunk" autocomplete="off">
+            <p class="manage-field-hint">Click the square to add a logo, or drop or paste an image. You can add it later too.</p>
+          </div>
+        </div>
 
-  form.innerHTML = `
-    <input type="text" id="cf-name" class="form-input" placeholder="Client name" value="${escHtml(name)}">
-    <div class="logo-upload-row">
-      <label class="btn-ghost logo-upload-btn">
-        <i class="ph ph-upload-simple"></i> <span id="cf-logo-text">${logoUrl ? 'Change logo' : 'Choose logo'}</span>
-        <input type="file" id="cf-logo" accept="image/*" class="hidden">
-      </label>
-      <img id="cf-logo-preview" class="client-logo" src="${logoUrl}" style="${logoUrl ? '' : 'display:none'}">
-      <button class="btn-ghost" id="cf-logo-clear" style="${logoUrl ? '' : 'display:none'};font-size:12px;">Remove</button>
-    </div>
-    <div class="rate-row">
-      <div class="rate-field">
-        <label class="form-label-sm">Default hourly rate</label>
-        <input type="number" id="cf-rate" class="form-input" placeholder="0" min="0" step="1" value="${rate}">
+        <div class="manage-field">
+          <label class="manage-field-label" for="nc-project">First project <span class="manage-optional">optional</span></label>
+          <input type="text" id="nc-project" class="form-input" placeholder="e.g. Brand identity" autocomplete="off">
+          <p class="manage-field-hint">Tasks are filed under a project. You can add more afterwards.</p>
+        </div>
+
+        <details class="nc-more" id="nc-more">
+          <summary>Billing and Slack <span class="manage-optional">optional</span></summary>
+          <div class="manage-fields">
+            <div class="manage-field">
+              <label class="manage-field-label" for="nc-rate">Default hourly rate</label>
+              <div class="manage-rate-control">
+                <select id="nc-currency" class="form-select" aria-label="Currency">${currencyOptions('INR')}</select>
+                <input type="number" id="nc-rate" class="form-input" min="0" step="1" inputmode="decimal" placeholder="Not set">
+              </div>
+            </div>
+            <div class="manage-field">
+              <span class="manage-field-label" id="nc-slack-label">Slack channel</span>
+              <button type="button" class="manage-channel-btn empty" id="nc-slack-btn" aria-haspopup="dialog" aria-expanded="false" aria-labelledby="nc-slack-label nc-slack-btn">
+                <i class="ph ph-slack-logo"></i>
+                <span class="manage-channel-text" id="nc-slack-text">Choose a channel</span>
+                <i class="ph ph-caret-down"></i>
+              </button>
+            </div>
+          </div>
+        </details>
+
+        <p class="manage-form-note error hidden" id="nc-error" role="alert"></p>
+      </form>
+      <div class="modal-footer">
+        <div class="modal-footer-right">
+          <button type="button" class="btn-ghost" id="nc-cancel">Cancel</button>
+          <button type="submit" form="nc-form" class="btn-primary" id="nc-save">Create client</button>
+        </div>
       </div>
-      <div class="rate-field rate-currency-field">
-        <label class="form-label-sm">Currency</label>
-        <select id="cf-currency" class="form-select">
-          <option value="INR"${currency === 'INR' ? ' selected' : ''}>INR</option>
-          <option value="USD"${currency === 'USD' ? ' selected' : ''}>USD</option>
-        </select>
-      </div>
-    </div>
-    <div class="rate-field" style="width:100%">
-      <label class="form-label-sm">Slack Channel ID</label>
-      <input type="text" id="cf-slack" class="form-input" placeholder="e.g. C08UCQXH7D0" value="${escHtml(slack)}">
-    </div>
-    <div class="rate-field" style="width:100%">
-      <label class="form-label-sm">Client-shared Slack Channel ID</label>
-      <input type="text" id="cf-shared-channel" class="form-input" placeholder="Channel Asterisk may read" value="${escHtml(sharedChannel)}">
-    </div>
-    <div class="rate-field" style="width:100%">
-      <label class="form-label-sm">Default owner</label>
-      <select id="cf-default-owner" class="form-select">
-        <option value="">None</option>
-        ${TEAM.map((m) => `<option value="${escHtml(m.email)}"${m.email === defaultOwner ? ' selected' : ''}>${escHtml(m.name)}</option>`).join('')}
-      </select>
-    </div>
-    <div class="inline-form-actions">
-      <button class="btn-primary" id="cf-save">${existing ? 'Save' : 'Add'}</button>
-      <button class="btn-ghost" id="cf-cancel">Cancel</button>
     </div>
   `
-  form.classList.remove('hidden')
+  document.body.appendChild(overlay)
 
-  let selectedLogoFile = null
-  let logoUrlState = logoUrl
+  const $ = (id) => overlay.querySelector('#' + id)
+  const nameInput = $('nc-name')
+  const errorEl = $('nc-error')
+  const saveBtn = $('nc-save')
 
-  const logoInput = document.getElementById('cf-logo')
-  const logoText = document.getElementById('cf-logo-text')
-  const logoPreview = document.getElementById('cf-logo-preview')
-  const logoClear = document.getElementById('cf-logo-clear')
-
-  logoInput.addEventListener('change', () => {
-    const file = logoInput.files[0]
-    if (file) {
-      selectedLogoFile = file
-      logoPreview.src = URL.createObjectURL(file)
-      logoPreview.style.display = ''
-      logoClear.style.display = ''
-      logoText.textContent = file.name
-    }
-  })
-
-  logoClear.addEventListener('click', () => {
-    selectedLogoFile = null
-    logoUrlState = ''
-    logoInput.value = ''
-    logoPreview.style.display = 'none'
-    logoClear.style.display = 'none'
-    logoText.textContent = 'Choose logo'
-  })
-
-  document.getElementById('cf-name').focus()
-
-  document.getElementById('cf-cancel').addEventListener('click', () => {
-    form.classList.add('hidden')
-    editingClientId = null
-  })
-
-  const save = async () => {
-    const newName = document.getElementById('cf-name').value.trim()
-    if (!newName) return
-    const newRate = parseFloat(document.getElementById('cf-rate').value) || 0
-    const newCurrency = document.getElementById('cf-currency').value || 'INR'
-    const newSlack = document.getElementById('cf-slack').value.trim()
-    const newSharedChannel = document.getElementById('cf-shared-channel').value.trim()
-    const newDefaultOwner = document.getElementById('cf-default-owner').value
-    const saveBtn = document.getElementById('cf-save')
-    saveBtn.disabled = true
-    saveBtn.textContent = 'Saving…'
-
-    try {
-      if (editingClientId) {
-        let finalLogoUrl = logoUrlState
-        if (selectedLogoFile) {
-          finalLogoUrl = await uploadClientLogo(selectedLogoFile, editingClientId)
-        }
-        await updateClient(currentCtx.db, editingClientId, {
-          name: newName, logoUrl: finalLogoUrl, defaultHourlyRate: newRate, currency: newCurrency, slackChannelId: newSlack,
-          clientSharedChannelId: newSharedChannel, defaultOwner: newDefaultOwner,
-        })
-      } else {
-        const docRef = await createClient(currentCtx.db, {
-          name: newName, logoUrl: '', defaultHourlyRate: newRate, currency: newCurrency, slackChannelId: newSlack,
-          clientSharedChannelId: newSharedChannel, defaultOwner: newDefaultOwner,
-        })
-        if (selectedLogoFile) {
-          const url = await uploadClientLogo(selectedLogoFile, docRef.id)
-          await updateClient(currentCtx.db, docRef.id, { logoUrl: url })
-        }
-        selectedClientId = docRef.id
-      }
-    } catch (err) {
-      console.error('Error saving client:', err)
-    }
-
-    editingClientId = null
-    form.classList.add('hidden')
+  const showError = (msg) => {
+    errorEl.textContent = msg
+    errorEl.classList.toggle('hidden', !msg)
   }
 
-  document.getElementById('cf-save').addEventListener('click', save)
-  document.getElementById('cf-name').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') save()
-    if (e.key === 'Escape') document.getElementById('cf-cancel').click()
-  })
-}
-
-function openProjectForm(existing, client) {
-  const form = document.getElementById('add-project-form')
-  if (!form) return
-
-  const name = existing?.name || ''
-  const slack = existing?.slackChannelId || ''
-  const rate = existing?.hourlyRate ?? ''
-  const inheritHint = client?.defaultHourlyRate
-    ? `Inherits ${client.currency || 'INR'} ${client.defaultHourlyRate}`
-    : 'No client rate set'
-
-  form.innerHTML = `
-    <input type="text" id="pf-name" class="form-input" placeholder="Project name" value="${escHtml(name)}">
-    <div class="rate-row">
-      <div class="rate-field">
-        <label class="form-label-sm">Hourly rate (optional)</label>
-        <input type="number" id="pf-rate" class="form-input" placeholder="${escHtml(inheritHint)}" min="0" step="1" value="${rate}">
-      </div>
-    </div>
-    <div class="rate-field" style="width:100%">
-      <label class="form-label-sm">Slack Channel ID (optional, overrides client channel)</label>
-      <input type="text" id="pf-slack" class="form-input" placeholder="e.g. C08UCQXH7D0" value="${escHtml(slack)}">
-    </div>
-    <div class="inline-form-actions">
-      <button class="btn-primary" id="pf-save">${existing ? 'Save' : 'Add'}</button>
-      <button class="btn-ghost" id="pf-cancel">Cancel</button>
-    </div>
-  `
-  form.classList.remove('hidden')
-  document.getElementById('pf-name').focus()
-
-  document.getElementById('pf-cancel').addEventListener('click', () => {
-    form.classList.add('hidden')
-    editingProjectId = null
-  })
-
-  const save = async () => {
-    const newName = document.getElementById('pf-name').value.trim()
-    if (!newName) return
-    const newSlack = document.getElementById('pf-slack').value.trim()
-    const rateInput = document.getElementById('pf-rate').value
-    const newRate = rateInput === '' ? null : parseFloat(rateInput)
-
-    const data = { name: newName, clientId: client.id, slackChannelId: newSlack }
-    if (newRate != null) data.hourlyRate = newRate
-
-    if (editingProjectId) {
-      await updateProject(currentCtx.db, editingProjectId, data)
-    } else {
-      const currency = client?.currency || 'INR'
-      await createProject(currentCtx.db, { ...data, hourlyRate: newRate ?? (client?.defaultHourlyRate || 0), currency })
-    }
-
-    editingProjectId = null
-    form.classList.add('hidden')
+  const close = () => {
+    if (logoPreviewUrl) URL.revokeObjectURL(logoPreviewUrl)
+    document.removeEventListener('paste', onPaste)
+    overlay.remove()
+    previous?.focus?.()
   }
 
-  document.getElementById('pf-save').addEventListener('click', save)
-  document.getElementById('pf-name').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') save()
-    if (e.key === 'Escape') document.getElementById('pf-cancel').click()
+  const setLogo = (file) => {
+    if (logoPreviewUrl) URL.revokeObjectURL(logoPreviewUrl)
+    logoFile = file
+    logoPreviewUrl = file ? URL.createObjectURL(file) : ''
+    $('nc-logo-preview').src = logoPreviewUrl
+    $('nc-logo-preview').classList.toggle('hidden', !file)
+    $('nc-logo-empty').classList.toggle('hidden', !!file)
+    $('nc-logo-remove').classList.toggle('hidden', !file)
+    $('nc-logo-btn').setAttribute('aria-label', file ? 'Change logo' : 'Add a logo')
+  }
+  wireLogoTarget($('nc-logo-btn'), $('nc-logo-input'), setLogo)
+  $('nc-logo-remove').addEventListener('click', () => setLogo(null))
+
+  const onPaste = (e) => {
+    const file = [...(e.clipboardData?.files || [])].find((f) => f.type.startsWith('image/'))
+    if (file && validLogoFile(file)) { e.preventDefault(); setLogo(file) }
+  }
+  document.addEventListener('paste', onPaste)
+
+  $('nc-slack-btn').addEventListener('click', () => {
+    openChannelPicker($('nc-slack-btn'), {
+      currentUser: currentCtx?.currentUser,
+      value: channel.id,
+      onPick: (ch) => {
+        channel = ch
+        $('nc-slack-text').textContent = ch.id ? (ch.name ? '#' + ch.name : ch.id) : 'Choose a channel'
+        $('nc-slack-btn').classList.toggle('empty', !ch.id)
+      },
+    })
   })
-}
 
-function openClientUserForm(client) {
-  const form = document.getElementById('add-cu-form')
-  if (!form) return
+  nameInput.addEventListener('input', () => showError(''))
+  $('nc-close').addEventListener('click', close)
+  $('nc-cancel').addEventListener('click', close)
+  overlay.addEventListener('mousedown', (e) => { if (e.target === overlay && !saving) close() })
+  overlay.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !saving) close() })
 
-  form.innerHTML = `
-    <input type="email" id="cuf-email" class="form-input" placeholder="Email address">
-    <input type="text" id="cuf-name" class="form-input" placeholder="Name">
-    <div class="inline-form-actions">
-      <button class="btn-primary" id="cuf-save">Invite</button>
-      <button class="btn-ghost" id="cuf-cancel">Cancel</button>
-    </div>
-  `
-  form.classList.remove('hidden')
-  document.getElementById('cuf-email').focus()
+  $('nc-form').addEventListener('submit', async (e) => {
+    e.preventDefault()
+    if (saving) return
+    const name = nameInput.value.trim()
+    if (!name) { showError('Give the client a name.'); nameInput.focus(); return }
+    const clash = nameTaken(name)
+    if (clash) {
+      showError(clash.archived
+        ? `“${clash.name}” already exists but is archived. Unarchive it from the list instead.`
+        : `There's already a client called “${clash.name}”.`)
+      nameInput.focus()
+      return
+    }
+    const rate = Math.max(0, parseFloat($('nc-rate').value) || 0)
+    const currency = $('nc-currency').value || 'INR'
+    const projectName = $('nc-project').value.trim()
+    const db = currentCtx.db
 
-  document.getElementById('cuf-cancel').addEventListener('click', () => form.classList.add('hidden'))
-
-  const save = async () => {
-    const email = document.getElementById('cuf-email').value.trim().toLowerCase()
-    const name = document.getElementById('cuf-name').value.trim()
-    if (!email || !name) return
-    const saveBtn = document.getElementById('cuf-save')
+    saving = true
     saveBtn.disabled = true
-    saveBtn.textContent = 'Inviting…'
+    saveBtn.textContent = 'Creating…'
+    showError('')
+
+    let clientId
     try {
-      await createClientUser(currentCtx.db, email, {
-        name, clientId: client.id, invitedBy: currentCtx.currentUser?.email || '',
+      const ref = await createClient(db, {
+        name, logoUrl: '', defaultHourlyRate: rate, currency,
+        slackChannelId: channel.id, slackChannelName: channel.name,
       })
+      clientId = ref.id
     } catch (err) {
-      console.error('Error inviting client user:', err)
+      console.error('Error creating client:', err)
+      saving = false
+      saveBtn.disabled = false
+      saveBtn.textContent = 'Create client'
+      showError(`Couldn't create the client. ${err?.message || 'Try again.'}`)
+      return
     }
-    form.classList.add('hidden')
-  }
 
-  document.getElementById('cuf-save').addEventListener('click', save)
-  document.getElementById('cuf-email').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') save()
-    if (e.key === 'Escape') document.getElementById('cuf-cancel').click()
+    // The client exists now. Logo and first project are extras: if one fails,
+    // keep the client and say what's missing rather than leaving the dialog stuck.
+    const missed = []
+    if (logoFile) {
+      try {
+        const url = await uploadClientLogo(logoFile, clientId)
+        await updateClient(db, clientId, { logoUrl: url })
+      } catch (err) { console.error('Logo upload failed:', err); missed.push('the logo') }
+    }
+    if (projectName) {
+      try {
+        await createProject(db, { name: projectName, clientId, hourlyRate: rate, currency })
+      } catch (err) { console.error('First project failed:', err); missed.push('the first project') }
+    }
+
+    selectedClientId = clientId
+    activeProjectId = null
+    clientSearchTerm = ''
+    const search = document.getElementById('manage-client-search')
+    if (search) search.value = ''
+    close()
+    renderSidebar()
+    renderDetail()
+    if (missed.length) toast(`${name} was created, but ${missed.join(' and ')} didn't save. Add it from the client page.`, 'error')
+    else toast(`${name} added`)
   })
+
+  nameInput.focus()
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -681,7 +964,7 @@ function renderProjectDetail(pane, project) {
   pane.innerHTML = `
     <div class="person-detail">
       <div class="person-detail-header">
-        <button class="btn-ghost person-back-btn" id="project-back-btn">
+        <button class="btn-ghost person-back-btn" id="project-back-btn" aria-label="Back to ${escHtml(client?.name || 'client')}" title="Back to ${escHtml(client?.name || 'client')}">
           <i class="ph ph-arrow-left"></i>
         </button>
         <div class="person-detail-identity">
@@ -746,7 +1029,7 @@ function renderProjectPageTab(container, project) {
   if (projectIsEditing) {
     container.innerHTML = `
       <div class="page-editor">
-        <textarea id="project-page-textarea" class="page-editor-textarea" placeholder="Write about this project using markdown...">${escHtml(content)}</textarea>
+        <textarea id="project-page-textarea" class="page-editor-textarea" data-draft placeholder="Write about this project using markdown...">${escHtml(content)}</textarea>
         <div class="page-editor-actions">
           <button class="btn-primary" id="project-page-save">Save</button>
           <button class="btn-ghost" id="project-page-cancel">Cancel</button>
@@ -800,50 +1083,95 @@ function renderProjectPageTab(container, project) {
 }
 
 function renderProjectSettingsTab(container, project) {
+  const db = currentCtx.db
   const client = localClients.find((c) => c.id === project.clientId)
   const rate = project.hourlyRate ?? client?.defaultHourlyRate ?? 0
   const currency = project.currency || client?.currency || 'INR'
-  const inherited = project.hourlyRate == null || project.hourlyRate === undefined
+  const inherited = project.hourlyRate == null
 
-  const projectSlack = project.slackChannelId || ''
-  const clientSlack = client?.slackChannelId || ''
+  const projectSlack = channelLabel(project.slackChannelId, project.slackChannelName)
+  const clientSlack = channelLabel(client?.slackChannelId, client?.slackChannelName)
+  const taskCount = (currentCtx?.allTasks || []).filter((t) => t.projectId === project.id).length
 
   container.innerHTML = `
     <div class="project-settings">
-      <div class="settings-section">
-        <h4 class="settings-section-title">Billing</h4>
-        <div class="settings-row">
-          <div class="rate-field">
-            <label class="form-label-sm">Hourly rate</label>
-            <input type="number" id="project-rate" class="form-input" value="${rate}" min="0" step="1" placeholder="0">
-          </div>
-          <div class="rate-field rate-currency-field">
-            <label class="form-label-sm">Currency</label>
-            <select id="project-currency" class="form-select">
-              <option value="INR"${currency === 'INR' ? ' selected' : ''}>INR</option>
-              <option value="USD"${currency === 'USD' ? ' selected' : ''}>USD</option>
-            </select>
-          </div>
+      <div class="manage-fields">
+        <div class="manage-field manage-field-wide">
+          <label class="manage-field-label" for="project-name">Project name</label>
+          <input type="text" id="project-name" class="form-input" value="${escHtml(project.name)}" autocomplete="off">
         </div>
-        ${inherited && client ? `<p class="settings-hint">Inherited from ${escHtml(client.name)} default rate</p>` : ''}
-      </div>
-      <div class="settings-section">
-        <h4 class="settings-section-title">Slack</h4>
-        <div class="rate-field" style="width:100%">
-          <label class="form-label-sm">Slack Channel ID (overrides client channel)</label>
-          <input type="text" id="project-slack-channel" class="form-input" value="${escHtml(projectSlack)}" placeholder="e.g. C08UCQXH7D0">
+        <div class="manage-field">
+          <label class="manage-field-label" for="project-rate">Hourly rate</label>
+          <div class="manage-rate-control">
+            <select id="project-currency" class="form-select" aria-label="Currency">${currencyOptions(currency)}</select>
+            <input type="number" id="project-rate" class="form-input" value="${rate}" min="0" step="1" inputmode="decimal" placeholder="0">
+          </div>
+          ${inherited && client ? `<p class="manage-field-hint settings-hint">Inherited from ${escHtml(client.name)} default rate</p>` : ''}
         </div>
-        ${clientSlack && !projectSlack ? `<p class="settings-hint">Using client channel: ${escHtml(clientSlack)}</p>` : ''}
+        <div class="manage-field">
+          <span class="manage-field-label" id="project-slack-label">Slack channel</span>
+          <button class="manage-channel-btn${projectSlack ? '' : ' empty'}" id="project-slack-btn" aria-haspopup="dialog" aria-expanded="false" aria-labelledby="project-slack-label project-slack-btn">
+            <i class="ph ph-slack-logo"></i>
+            <span class="manage-channel-text">${projectSlack ? escHtml(projectSlack) : (clientSlack ? `Same as client (${escHtml(clientSlack)})` : 'Choose a channel')}</span>
+            <i class="ph ph-caret-down"></i>
+          </button>
+          <p class="manage-field-hint">Only set this if the project has its own channel.</p>
+        </div>
       </div>
-      <button class="btn-primary" id="project-settings-save" style="margin-top:8px">Save</button>
+      <p class="manage-field-hint">Changes save as you make them.</p>
+
+      <div class="manage-danger-zone">
+        <div>
+          <strong>Delete this project</strong>
+          <p class="manage-field-hint">${taskCount ? `Its ${plural(taskCount, 'task')} are kept but will no longer belong to a project.` : 'It has no tasks.'}</p>
+        </div>
+        <button class="btn-ghost danger" id="project-delete-btn"><i class="ph ph-trash"></i> Delete project</button>
+      </div>
     </div>
   `
 
-  document.getElementById('project-settings-save').addEventListener('click', async () => {
-    const newRate = parseFloat(document.getElementById('project-rate').value) || 0
-    const newCurrency = document.getElementById('project-currency').value || 'INR'
-    const newSlack = document.getElementById('project-slack-channel').value.trim()
-    await updateProject(currentCtx.db, project.id, { hourlyRate: newRate, currency: newCurrency, slackChannelId: newSlack })
+  const nameInput = document.getElementById('project-name')
+  nameInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') nameInput.blur()
+    if (e.key === 'Escape') { nameInput.value = project.name; nameInput.blur() }
+  })
+  nameInput.addEventListener('change', () => {
+    const next = nameInput.value.trim()
+    if (!next || next === project.name) { nameInput.value = project.name; return }
+    attempt(() => updateProject(db, project.id, { name: next }), { ok: 'Renamed', fail: 'Couldn\'t rename the project' })
+  })
+
+  const rateInput = document.getElementById('project-rate')
+  const currencySelect = document.getElementById('project-currency')
+  const saveRate = () => {
+    const newRate = Math.max(0, parseFloat(rateInput.value) || 0)
+    attempt(() => updateProject(db, project.id, { hourlyRate: newRate, currency: currencySelect.value || 'INR' }), { ok: 'Rate saved', fail: 'Couldn\'t save the rate' })
+  }
+  rateInput.addEventListener('change', saveRate)
+  rateInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') rateInput.blur() })
+  currencySelect.addEventListener('change', saveRate)
+
+  const slackBtn = document.getElementById('project-slack-btn')
+  slackBtn.addEventListener('click', () => {
+    openChannelPicker(slackBtn, {
+      currentUser: currentCtx.currentUser,
+      value: project.slackChannelId || '',
+      onPick: (ch) => saveChannel((data) => updateProject(db, project.id, data), ch),
+    })
+  })
+
+  document.getElementById('project-delete-btn').addEventListener('click', async () => {
+    const yes = await confirmDialog({
+      title: `Delete “${project.name}”?`,
+      body: taskCount
+        ? `This can't be undone. Its ${plural(taskCount, 'task')} stay under ${client?.name || 'the client'} without a project.`
+        : 'This can\'t be undone.',
+      confirmLabel: 'Delete project',
+      danger: true,
+    })
+    if (!yes) return
+    const done = await attempt(() => deleteProject(db, project.id), { ok: `Deleted “${project.name}”`, fail: 'Couldn\'t delete the project' })
+    if (done) { activeProjectId = null; renderDetail() }
   })
 }
 
@@ -922,4 +1250,7 @@ export function cleanupClients() {
   currentCtx = null
   activeProjectId = null
   projectIsEditing = false
+  addingProject = false
+  addingPerson = false
+  document.getElementById('new-client-overlay')?.remove()
 }
