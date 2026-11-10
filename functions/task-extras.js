@@ -89,4 +89,34 @@ function asteriskTaskMessage({ title, assignees = [], clientName = '', projectNa
   return `New task${who} added to PK Work by Asterisk\n⭕️ ${line}`
 }
 
-module.exports = { asteriskTaskMessage, normalizeSource, normalizeCapture, normalizeCaptureLog, normalizeComment, MAX_COMMENT_LENGTH }
+// The same post with buttons. "Not a task" removes the task, and when Asterisk
+// could not tell the project, one button per project asks the team.
+function asteriskTaskBlocks({ taskId, text, projects = [] }) {
+  const button = (label, actionId) => ({
+    type: 'button',
+    action_id: actionId,
+    value: taskId,
+    text: { type: 'plain_text', text: label.slice(0, 75), emoji: true },
+  })
+  // Titles are user input and land inside mrkdwn.
+  const safe = String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  const blocks = [{ type: 'section', block_id: `task_${taskId}`, text: { type: 'mrkdwn', text: safe } }]
+  if (projects.length) {
+    blocks.push({ type: 'context', block_id: `ask_${taskId}`, elements: [{ type: 'mrkdwn', text: 'Which project is this for?' }] })
+  }
+  blocks.push({
+    type: 'actions',
+    // chat.update finds this row by id to change it after a click.
+    block_id: `actions_${taskId}`,
+    elements: [
+      ...projects.slice(0, 20).map((p) => button(`📁 ${p.name}`, `${PROJECT_ACTION}${p.id}`)),
+      button('🚫 Not a task', 'not_a_task'),
+    ],
+  })
+  return blocks
+}
+
+// Project buttons carry the project in the action id and the task in the value.
+const PROJECT_ACTION = 'project:'
+
+module.exports = { asteriskTaskMessage, asteriskTaskBlocks, PROJECT_ACTION, normalizeSource, normalizeCapture, normalizeCaptureLog, normalizeComment, MAX_COMMENT_LENGTH }

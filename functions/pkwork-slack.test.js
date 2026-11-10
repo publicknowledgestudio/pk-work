@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import crypto from 'node:crypto'
 import { resolveBlocks, verifySignature, isFreshSlackWrite } from './pkwork-slack.js'
 import { renderProjectMessage } from './digest.js'
+import { asteriskTaskBlocks } from './task-extras.js'
 
 const message = {
   projectName: 'Website',
@@ -80,6 +81,29 @@ describe('resolveBlocks', () => {
 
   it('is a no-op for a task id not in the message', () => {
     expect(JSON.stringify(resolveBlocks(blocks, 'NOPE', 'x'))).toBe(JSON.stringify(blocks))
+  })
+})
+
+describe('resolveBlocks on a task Asterisk added', () => {
+  const blocks = asteriskTaskBlocks({
+    taskId: 'T1', text: 'New task added to PK Work by Asterisk\n⭕️ Into · Add references',
+    projects: [{ id: 'p1', name: 'Brand' }, { id: 'p2', name: 'Product' }],
+  })
+  const isProject = (id) => id.startsWith('project:')
+
+  it('"Not a task" strikes both lines and removes the question and buttons', () => {
+    const out = resolveBlocks(blocks, 'T1', 'not a task, removed by Charu')
+    expect(out.map((b) => b.block_id)).toEqual(['task_T1'])
+    expect(out[0].text.text).toBe('~New task added to PK Work by Asterisk~\n~⭕️ Into · Add references~  _not a task, removed by Charu_')
+  })
+
+  it('choosing a project removes the question but keeps "Not a task"', () => {
+    const out = resolveBlocks(blocks, 'T1', 'filed under Brand by Charu', { strike: false, dropActions: isProject })
+    expect(out.map((b) => b.block_id)).toEqual(['task_T1', 'actions_T1'])
+    expect(out[1].elements.map((e) => e.action_id)).toEqual(['not_a_task'])
+    expect(out[0].text.text).toMatch(/Add references  _filed under Brand by Charu_$/)
+    // The task can still be removed afterwards.
+    expect(resolveBlocks(out, 'T1', 'not a task').map((b) => b.block_id)).toEqual(['task_T1'])
   })
 })
 

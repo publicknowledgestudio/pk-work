@@ -25,6 +25,7 @@ const {
   isoDateInTz,
 } = require('./digest')
 const { applySchedule } = require('./schedule-core')
+const { PROJECT_ACTION } = require('./task-extras')
 
 const PKWORK_SLACK_BOT_TOKEN = defineSecret('PKWORK_SLACK_BOT_TOKEN')
 const PKWORK_SLACK_SIGNING_SECRET = defineSecret('PKWORK_SLACK_SIGNING_SECRET')
@@ -301,6 +302,45 @@ async function applyAction({ actionId, taskId, clicker, resolveAssignees, now })
     }
   }
 
+  // On the post for a task Asterisk added: it was not a task after all. The
+  // task goes, and its capture is marked undone, as Undo does in the app.
+  if (actionId === 'not_a_task') {
+    const task = snap.data()
+    if (task.createdBy !== 'asterisk') {
+      return { ok: false, label: 'only tasks Asterisk added can be removed here' }
+    }
+    const batch = db().batch()
+    batch.delete(ref)
+    const captureId = task.capture && task.capture.captureId
+    const captureRef = captureId && db().collection('captures').doc(captureId)
+    if (captureRef && (await captureRef.get()).exists) {
+      batch.update(captureRef, { status: 'undone', undoneBy: actor, updatedAt: stamp })
+    }
+    await batch.commit()
+    return { ok: true, label: `not a task, removed by ${clicker.name}`, strike: true }
+  }
+
+  // On the same post, when Asterisk could not tell the project.
+  if (actionId.startsWith(PROJECT_ACTION)) {
+    const projectSnap = await db().collection('projects').doc(actionId.slice(PROJECT_ACTION.length)).get()
+    if (!projectSnap.exists || projectSnap.data().clientId !== snap.data().clientId) {
+      return { ok: false, label: 'that project does not belong to this client' }
+    }
+    await ref.update({
+      projectId: projectSnap.id,
+      updatedAt: stamp,
+      updatedBy: actor,
+      updatedVia: slackSourceMark(),
+    })
+    return {
+      ok: true,
+      label: `filed under ${projectSnap.data().name} by ${clicker.name}`,
+      strike: false,
+      // The question is answered; "Not a task" stays.
+      dropActions: (id) => id.startsWith(PROJECT_ACTION),
+    }
+  }
+
   return { ok: false, label: `unknown action: ${actionId}` }
 }
 
@@ -317,10 +357,15 @@ const STATUS_EMOJI_RE = /^(⭕️|🟡|🟣)/
  *     read as finished, so instead swap its status emoji to 🟡 and keep the
  *     buttons live, so it can still be marked done from the same message.
  */
-function resolveBlocks(blocks, taskId, label, { strike = true, emoji = null } = {}) {
+function resolveBlocks(blocks, taskId, label, { strike = true, emoji = null, dropActions = null } = {}) {
   return blocks
     .filter((b) => !(strike && b.block_id === `actions_${taskId}`))
+    // A question about the task is settled by any click that ends or answers it.
+    .filter((b) => !((strike || dropActions) && b.block_id === `ask_${taskId}`))
     .map((b) => {
+      if (dropActions && b.block_id === `actions_${taskId}`) {
+        return { ...b, elements: b.elements.filter((e) => !dropActions(e.action_id)) }
+      }
       if (b.block_id !== `task_${taskId}`) return b
 
       let text = b.text.text
@@ -328,7 +373,9 @@ function resolveBlocks(blocks, taskId, label, { strike = true, emoji = null } = 
       if (text.startsWith('~') || text.endsWith(`_${label}_`)) return b
 
       if (emoji) text = text.replace(STATUS_EMOJI_RE, emoji)
-      text = strike ? `~${text}~  _${label}_` : `${text}  _${label}_`
+      // Slack ends a strike at a line break, so each line gets its own.
+      const struck = () => text.split('\n').map((line) => `~${line}~`).join('\n')
+      text = strike ? `${struck()}  _${label}_` : `${text}  _${label}_`
 
       return { ...b, text: { type: 'mrkdwn', text } }
     })
@@ -398,6 +445,7 @@ function createInteractivityHandler({ resolveAssignees }) {
               ? resolveBlocks(payload.message.blocks, taskId, result.label, {
                   strike: result.strike,
                   emoji: result.emoji,
+                  dropActions: result.dropActions,
                 })
               : payload.message.blocks,
             text: payload.message.text || 'PK Work',

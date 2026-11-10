@@ -906,7 +906,7 @@ exports.mcp = onRequest(
 // Replaces the OpenClaw `client-todo-digest` agent cron. See functions/pkwork-slack.js.
 
 const pkworkSlack = require('./pkwork-slack')
-const { asteriskTaskMessage, normalizeSource, normalizeCapture, normalizeCaptureLog, normalizeComment } = require('./task-extras')
+const { asteriskTaskMessage, asteriskTaskBlocks, normalizeSource, normalizeCapture, normalizeCaptureLog, normalizeComment } = require('./task-extras')
 
 exports.pkworkSlack = pkworkSlack.createInteractivityHandler({ resolveAssignees })
 exports.clientTodoDigest = pkworkSlack.createDigestSchedule()
@@ -964,7 +964,14 @@ exports.onTaskWritten = onDocumentWritten(
         const message = createdBy === 'asterisk'
           ? asteriskTaskMessage({ title: task.title, assignees: task.assignees || [], clientName: client.name, projectName })
           : `📋 New task created by external user "${userName}" — ${task.title}\n${contextLine}`
-        await postToSlackChannel(event.params.taskId, channelId, message, createdBy)
+        // Asterisk's tasks come with a way to say it got one wrong, and a
+        // question when it could not tell the project.
+        let blocks
+        if (createdBy === 'asterisk') {
+          const projects = task.projectId ? [] : await listClientProjects(task.clientId)
+          blocks = asteriskTaskBlocks({ taskId: event.params.taskId, text: message, projects: projects.length > 1 ? projects : [] })
+        }
+        await postToSlackChannel(event.params.taskId, channelId, message, createdBy, blocks)
       }
     }
 
@@ -995,6 +1002,12 @@ exports.onTaskWritten = onDocumentWritten(
   }
 )
 
+async function listClientProjects(clientId) {
+  const snap = await db.collection('projects').where('clientId', '==', clientId).get()
+  return snap.docs.map((d) => ({ id: d.id, name: d.data().name || '' })).filter((p) => p.name)
+    .sort((a, b) => a.name.localeCompare(b.name))
+}
+
 function lookupTeamName(email) {
   if (!email) return 'someone'
   const member = TEAM_MEMBERS.find((m) => m.email === email)
@@ -1005,7 +1018,7 @@ function lookupTeamName(email) {
 // surface a success/failure toast to the user who acted. Slack returns
 // HTTP 200 even for API-level failures (ok: false with an error code
 // like 'not_in_channel'), so we must parse the body to detect them.
-async function postToSlackChannel(taskId, channelId, text, actedBy) {
+async function postToSlackChannel(taskId, channelId, text, actedBy, blocks = null) {
   const writeOutcome = (status, error) => db.collection('tasks').doc(taskId).update({
     slackNotification: {
       status,
@@ -1034,7 +1047,8 @@ async function postToSlackChannel(taskId, channelId, text, actedBy) {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`,
       },
-      body: JSON.stringify({ channel: channelId, text }),
+      // Buttons only work on posts from the PK Work app, which receives the clicks.
+      body: JSON.stringify({ channel: channelId, text, ...(blocks && process.env.PKWORK_SLACK_BOT_TOKEN ? { blocks } : {}) }),
     })
     const data = await resp.json()
     if (data.ok) return writeOutcome('ok', '')

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { asteriskTaskMessage, normalizeSource, normalizeCapture, normalizeCaptureLog, normalizeComment, MAX_COMMENT_LENGTH } from './task-extras.js'
+import { asteriskTaskMessage, asteriskTaskBlocks, normalizeSource, normalizeCapture, normalizeCaptureLog, normalizeComment, MAX_COMMENT_LENGTH } from './task-extras.js'
 
 describe('normalizeSource', () => {
   it('returns null when absent', () => {
@@ -32,6 +32,21 @@ describe('asteriskTaskMessage', () => {
   })
   it('leaves out what it does not have', () => {
     expect(asteriskTaskMessage({ title: 'Audit', clientName: 'Brunk' })).toBe('New task added to PK Work by Asterisk\n⭕️ Brunk · Audit')
+  })
+})
+
+describe('asteriskTaskBlocks', () => {
+  it('offers "Not a task" on every post', () => {
+    const blocks = asteriskTaskBlocks({ taskId: 'T1', text: 'New task\n⭕️ Brunk · A <b> & c' })
+    expect(blocks.map((b) => b.block_id)).toEqual(['task_T1', 'actions_T1'])
+    expect(blocks[0].text.text).toBe('New task\n⭕️ Brunk · A &lt;b&gt; &amp; c')
+    expect(blocks[1].elements.map((e) => [e.action_id, e.value])).toEqual([['not_a_task', 'T1']])
+  })
+  it('asks for the project when it is not known', () => {
+    const blocks = asteriskTaskBlocks({ taskId: 'T1', text: 't', projects: [{ id: 'p1', name: 'Brand' }, { id: 'p2', name: 'Website' }] })
+    expect(blocks.map((b) => b.block_id)).toEqual(['task_T1', 'ask_T1', 'actions_T1'])
+    expect(blocks[2].elements.map((e) => e.action_id)).toEqual(['project:p1', 'project:p2', 'not_a_task'])
+    expect(blocks[2].elements[0].text.text).toBe('📁 Brand')
   })
 })
 
