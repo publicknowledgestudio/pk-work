@@ -46,9 +46,10 @@ not triggered.
 - The functions tests have no npm script. Run them from the repo root with
   `npx vitest run --root functions`; `npm test` inside `functions/` fails.
 - `firebase` is installed globally on Gyan's machine and logged in.
-- Existing bug, not from this work: `src/main.js:656` calls `cleanupWiki()`
-  on sign-out but never imports it from `src/wiki.js`. It throws on the login
-  screen, so `cleanupReferences()` and `cleanupAttendance()` after it never
-  run. Present since `eec0164`. Not fixed here.
+- Fixed afterwards: `src/main.js` called `cleanupWiki()` on sign-out without
+  importing it, which threw on the login screen and skipped the references
+  and attendance cleanup after it. The Wiki view is no longer wired into
+  `main.js`, so the dead call was removed and hosting redeployed (live bundle
+  is now `assets/index-BKsW6P_V.js`). `src/wiki.js` is now unused.
 
 Delete this file once you have read it.

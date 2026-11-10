@@ -653,7 +653,6 @@ if (!isDemo()) onAuthStateChanged(auth, async (user) => {
     }
     cleanupClients()
     cleanupPeople()
-    cleanupWiki()
     cleanupReferences()
     cleanupAttendance()
   }
