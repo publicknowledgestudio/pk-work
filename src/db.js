@@ -1,3 +1,5 @@
+import { calculate, ELIGIBLE } from '../functions/leave-policy.mjs'
+import { isAdmin } from './config.js'
 import {
   collection,
   doc,
@@ -62,6 +64,7 @@ export async function createClient(db, data) {
     defaultHourlyRate: data.defaultHourlyRate || 0,
     currency: data.currency || 'INR',
     slackChannelId: data.slackChannelId || '',
+    slackChannelName: data.slackChannelName || '',
     createdAt: serverTimestamp(),
   })
 }
@@ -165,6 +168,7 @@ export async function createProject(db, data) {
     hourlyRate: data.hourlyRate || 0,
     currency: data.currency || 'INR',
     slackChannelId: data.slackChannelId || '',
+    slackChannelName: data.slackChannelName || '',
     createdAt: serverTimestamp(),
   })
 }
@@ -616,10 +620,18 @@ export function subscribeToLeaves(db, callback) {
 }
 
 export async function createLeave(db, data) {
+  if (!ELIGIBLE.includes(data.userEmail)) throw new Error('Leave only applies to full-time members')
+  const [contracts, leaves, holidays] = await Promise.all([loadContracts(db), loadLeaves(db), loadHolidays(db)])
+  const candidate={...data,id:'__new__',status:'approved',creditApproved:data.type==='overtime' && isAdmin(currentUserEmail)}
+  const result=calculate({userEmail:data.userEmail,contracts,leaves:[...leaves,candidate],holidays,asOf:data.endDate || data.startDate})
+  const entries=result.entries.filter(e=>e.leaveId==='__new__')
+  if(entries.some(e=>e.error)) throw new Error('Contract required for these leave dates')
+  data={...candidate,days:entries.reduce((s,e)=>s+e.days,0),paidDays:entries.reduce((s,e)=>s+e.paidDays,0),unpaidDays:entries.reduce((s,e)=>s+e.unpaidDays,0)}
   return addDoc(collection(db, 'leaves'), {
     userEmail: data.userEmail,
     userName: data.userName || '',
     type: data.type,
+    creditApproved: data.creditApproved === true,
     startDate: data.startDate,
     endDate: data.endDate || data.startDate,
     halfDay: data.halfDay || false,
@@ -679,6 +691,7 @@ export async function createHoliday(db, data) {
   return addDoc(collection(db, 'holidays'), {
     date: data.date,
     name: data.name || '',
+    studioApproved: true,
     createdBy: data.createdBy || '',
     createdAt: serverTimestamp(),
   })

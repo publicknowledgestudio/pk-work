@@ -25,6 +25,7 @@ vi.mock('./db.js', () => ({
     return () => {}
   },
   subscribeToLeaves: (_, cb) => { cb([]); return () => {} },
+  subscribeToHolidays: (_, cb) => { cb([]); return () => {} },
   createContract: vi.fn(),
   updateContract: vi.fn(),
   deleteContract: vi.fn(),

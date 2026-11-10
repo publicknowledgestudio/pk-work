@@ -1,7 +1,9 @@
+import { calculate } from '../functions/leave-policy.mjs'
 import { TEAM, isAdmin, getAttendanceTeam } from './config.js'
 import {
   subscribeToContracts,
   subscribeToLeaves,
+  subscribeToHolidays,
   createContract,
   updateContract,
   deleteContract,
@@ -9,14 +11,13 @@ import {
 import {
   contractsForUser,
   currentContract,
-  contractMonths,
-  isWithinContractTerm,
-  medicalPoolForContract,
 } from './utils/contracts.js'
 import { toLocalISODate } from './utils/dates.js'
 
 let unsubContracts = null
 let unsubLeaves = null
+let unsubHolidays = null
+let allHolidays = []
 let allContracts = []
 let allLeaves = []
 let currentCtx = null
@@ -24,6 +25,7 @@ let currentCtx = null
 export function renderContracts(container, ctx) {
   if (unsubContracts) unsubContracts()
   if (unsubLeaves) unsubLeaves()
+  if (unsubHolidays) unsubHolidays()
   currentCtx = ctx
 
   const admin = isAdmin(ctx.currentUser.email)
@@ -39,17 +41,22 @@ export function renderContracts(container, ctx) {
   `
 
   let ready = 0
-  const checkReady = () => { if (++ready >= 2) renderList() }
+  const checkReady = () => { if (++ready >= 3) renderList() }
 
   unsubContracts = subscribeToContracts(ctx.db, (contracts) => {
     allContracts = contracts
-    if (ready >= 2) renderList()
+    if (ready >= 3) renderList()
     else checkReady()
   })
   unsubLeaves = subscribeToLeaves(ctx.db, (leaves) => {
     allLeaves = leaves
-    if (ready >= 2) renderList()
+    if (ready >= 3) renderList()
     else checkReady()
+  })
+
+  unsubHolidays = subscribeToHolidays(ctx.db, holidays => {
+    allHolidays = holidays
+    if (ready >= 3) renderList(); else checkReady()
   })
 
   if (admin) {
@@ -60,6 +67,7 @@ export function renderContracts(container, ctx) {
 export function cleanupContracts() {
   if (unsubContracts) { unsubContracts(); unsubContracts = null }
   if (unsubLeaves) { unsubLeaves(); unsubLeaves = null }
+  if (unsubHolidays) { unsubHolidays(); unsubHolidays = null }
 }
 
 function renderList() {
@@ -84,15 +92,13 @@ function renderList() {
 
     // Scoped to the current contract term — matches the Leaves balance cards.
     const contract = currentContract(memberContracts)
-    const accrued = contract ? contractMonths(contract) : 0
-    const usedDays = (type) => approvedLeaves
-      .filter((l) => l.userEmail === member.email && l.type === type && isWithinContractTerm(l.startDate, contract))
-      .reduce((sum, l) => sum + (l.halfDay ? 0.5 : countWeekdays(l.startDate, l.endDate || l.startDate)), 0)
-    const personalUsed = usedDays('personal')
-    const medicalUsed = usedDays('medical')
-    const medicalPool = medicalPoolForContract(contract)
-    const unpaid = Math.max(0, personalUsed - accrued)
-    const medicalUnpaid = Math.max(0, medicalUsed - medicalPool)
+    const balance = calculate({ userEmail:member.email, contracts:allContracts, leaves:approvedLeaves, holidays:allHolidays })
+    const accrued = balance.personal.accrued
+    const personalUsed = balance.personal.used
+    const medicalUsed = balance.medical.used
+    const medicalPool = balance.medical.accrued
+    const unpaid = balance.personal.unpaid
+    const medicalUnpaid = balance.medical.unpaid
 
     const metaHtml = contract
       ? `Personal <strong>${personalUsed}</strong> / ${accrued} used`
@@ -167,7 +173,7 @@ function renderContractRow(c, admin) {
         <strong>${esc(end)}</strong>
         ${statusBadge}
       </div>
-      <div class="contract-row-terms">${esc(String(typeof c.medicalLeaveTotal === 'number' ? c.medicalLeaveTotal : 3))} medical ${(typeof c.medicalLeaveTotal === 'number' ? c.medicalLeaveTotal : 3) === 1 ? 'leave' : 'leaves'} · 1 personal/mo</div>
+      <div class="contract-row-terms">${esc(String(typeof c.medicalLeaveTotal === 'number' ? c.medicalLeaveTotal : 3))} medical ${(typeof c.medicalLeaveTotal === 'number' ? c.medicalLeaveTotal : 3) === 1 ? 'leave' : 'leaves'} · 1 personal/completed month</div>
       ${showNote ? `<div class="contract-row-notes">${esc(c.notes)}</div>` : ''}
       ${admin ? `
         <div class="contract-row-actions">
@@ -213,7 +219,7 @@ function openContractModal({ mode, contract = null, forEmail = null }) {
           <input type="date" id="contract-end" class="form-input" value="${esc(contract?.endDate || '')}">
         </div>
         <div class="form-row">
-          <label class="form-label">Medical leaves <span class="form-label-hint">(total for this contract term, not per month)</span></label>
+          <label class="form-label">Medical leaves <span class="form-label-hint">(per six-month period, available at its start)</span></label>
           <input type="number" id="contract-medical" class="form-input" min="0" step="1" value="${esc(String(typeof contract?.medicalLeaveTotal === 'number' ? contract.medicalLeaveTotal : 3))}">
         </div>
         <div class="form-row">
@@ -284,18 +290,6 @@ function formatContractDate(dateStr) {
   return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-function countWeekdays(startDate, endDate) {
-  let count = 0
-  const start = new Date(startDate + 'T00:00:00')
-  const end = new Date(endDate + 'T00:00:00')
-  const current = new Date(start)
-  while (current <= end) {
-    const day = current.getDay()
-    if (day !== 0 && day !== 6) count++
-    current.setDate(current.getDate() + 1)
-  }
-  return count
-}
 
 function esc(s) {
   if (s == null) return ''

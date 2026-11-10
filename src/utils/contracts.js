@@ -1,8 +1,6 @@
 // Helpers for deriving leave-accrual data from a person's contracts.
 // A "contract" is { userEmail, startDate (YYYY-MM-DD), endDate (YYYY-MM-DD or null), ... }.
-// Months are counted inclusively from the start month: a contract that begins
-// March 1 contributes 1 month in March, 2 by April, etc. — matching the legacy
-// monthsSinceJoin semantics so the migration is a no-op for current data.
+// Personal leave is earned after a completed service month, never in advance.
 //
 // Leave balances are scoped to the CURRENT contract term (see currentContract):
 // each contract is self-contained, so a fresh contract starts with a fresh
@@ -10,6 +8,7 @@
 // contracts) don't count against it.
 
 import { toLocalISODate } from './dates.js'
+import { completedMonths } from '../../functions/leave-policy.mjs'
 
 // Default medical-leave pool for a contract when `medicalLeaveTotal` is unset.
 // Matches the written leave policy ("up to 3 days total during your contract").
@@ -19,23 +18,11 @@ function parseDate(s) {
   return new Date(s + 'T00:00:00')
 }
 
-function monthsBetweenInclusive(startDate, endDate) {
-  const start = parseDate(startDate)
-  const end = endDate instanceof Date ? endDate : parseDate(endDate)
-  if (end < start) return 0
-  return (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth()) + 1
+// Completed service months, capped at the contract's end.
+export function contractMonths(contract, asOf = new Date()) {
+  return completedMonths(contract, asOf instanceof Date ? toLocalISODate(asOf) : asOf)
 }
 
-// Months a single contract has accrued by `asOf`. Caps at the contract's
-// endDate if it has one; returns 0 if the contract hasn't started yet.
-export function contractMonths(contract, asOf = new Date()) {
-  if (!contract?.startDate) return 0
-  const start = parseDate(contract.startDate)
-  if (start > asOf) return 0
-  const end = contract.endDate ? parseDate(contract.endDate) : asOf
-  const cap = end < asOf ? end : asOf
-  return Math.max(0, monthsBetweenInclusive(contract.startDate, cap))
-}
 
 // Earliest contract start for a person, used as the "joined" anchor in the UI.
 // Returns YYYY-MM-DD or null.

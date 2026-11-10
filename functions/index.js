@@ -18,6 +18,8 @@ const admin = require('firebase-admin')
 
 admin.initializeApp()
 const db = admin.firestore()
+const leaveClose = require('./leave-close.cjs')({ db, admin, onRequest })
+exports.leaveClose = leaveClose.endpoint
 
 // Team config for leave balance calculations. Engagement dates live in the
 // `contracts` Firestore collection — see accrualForUser / earliestStart below.
@@ -36,6 +38,9 @@ const SLACK_BOT_TOKEN = defineSecret('SLACK_BOT_TOKEN')
 const OPENCLAW_WEBHOOK_URL = defineSecret('OPENCLAW_WEBHOOK_URL')
 const OPENCLAW_WEBHOOK_SECRET = defineSecret('OPENCLAW_WEBHOOK_SECRET')
 const POKE_MCP_KEY = defineSecret('POKE_MCP_KEY')
+
+// Slack channel list for the Manage page's channel picker (ID-token auth).
+exports.slackChannels = require('./slack-channels.cjs')({ admin, onRequest, slackBotToken: SLACK_BOT_TOKEN }).endpoint
 
 const LEAVES_CHANNEL_ID = 'C09U7GVJ31R'
 const LEAVE_NOTIFY_TYPES = new Set(['personal', 'medical', 'overtime'])
@@ -230,6 +235,7 @@ exports.api = onRequest(
 
     // --- LEAVES ---
     if (segments[0] === 'leaves') {
+      if (segments.length === 2 && segments[1] === 'closes' && ['GET','POST'].includes(req.method)) return await leaveClose.handle(req,res,'api')
       if (segments.length === 2 && segments[1] === 'balances' && req.method === 'GET') {
         return await getLeaveBalances(req, res)
       }
@@ -1600,61 +1606,6 @@ async function deleteMoodboard(req, res, boardId) {
 
 // === Leave Helpers ===
 
-function countWeekdays(startDate, endDate) {
-  let count = 0
-  const start = new Date(startDate + 'T00:00:00')
-  const end = new Date(endDate + 'T00:00:00')
-  const current = new Date(start)
-  while (current <= end) {
-    const day = current.getDay()
-    if (day !== 0 && day !== 6) count++
-    current.setDate(current.getDate() + 1)
-  }
-  return count
-}
-
-// Months a single contract has accrued by `asOf`. Mirrors src/utils/contracts.js.
-function contractMonths(contract, asOf) {
-  if (!contract || !contract.startDate) return 0
-  const start = new Date(contract.startDate + 'T00:00:00')
-  if (start > asOf) return 0
-  const end = contract.endDate ? new Date(contract.endDate + 'T00:00:00') : asOf
-  const cap = end < asOf ? end : asOf
-  return Math.max(0, (cap.getFullYear() - start.getFullYear()) * 12 + (cap.getMonth() - start.getMonth()) + 1)
-}
-
-// Sums accrued months across a person's contracts. Returns 0 for anyone with
-// no contracts in Firestore (admin must create one for new team members).
-async function accrualForUser(member, contractsByEmail = null) {
-  const userContracts = contractsByEmail
-    ? (contractsByEmail.get(member.email) || [])
-    : (await db.collection('contracts').where('userEmail', '==', member.email).get())
-        .docs.map((d) => d.data())
-  if (userContracts.length === 0) return 0
-  const now = new Date()
-  return userContracts.reduce((sum, c) => sum + contractMonths(c, now), 0)
-}
-
-// Earliest contract start date string (YYYY-MM-DD) or null.
-function earliestStart(_member, userContracts) {
-  const dates = (userContracts || []).map((c) => c.startDate).filter(Boolean).sort()
-  return dates[0] || null
-}
-
-// Loads all contracts once and indexes them by userEmail. Used by handlers
-// that need accrual for many people in one request.
-async function loadContractsByEmail() {
-  const snap = await db.collection('contracts').get()
-  const map = new Map()
-  snap.docs.forEach((d) => {
-    const c = d.data()
-    if (!map.has(c.userEmail)) map.set(c.userEmail, [])
-    map.get(c.userEmail).push(c)
-  })
-  return map
-}
-
-// === Leave Handlers ===
 
 async function listLeaves(req, res) {
   let q = db.collection('leaves')
@@ -1674,6 +1625,18 @@ async function listLeaves(req, res) {
     leaves = leaves.filter((l) => l.startDate <= req.query.endDate)
   }
 
+  const policy=await import('./leave-policy.mjs')
+  leaves=leaves.filter(l=>policy.ELIGIBLE.includes(l.userEmail))
+  const computed=new Map()
+  for(const email of new Set(leaves.map(l=>l.userEmail))) {
+    const input=await leaveClose.context(email)
+    const last=input.leaves.reduce((d,l)=>(l.endDate||l.startDate)>d?(l.endDate||l.startDate):d,policy.today())
+    computed.set(email,policy.calculate({...input,asOf:last}).entries)
+  }
+  leaves=leaves.map(l=>{
+    const entries=(computed.get(l.userEmail)||[]).filter(e=>e.leaveId===l.id)
+    return {...l,calculatedDays:entries,days:entries.reduce((s,e)=>s+e.days,0),paidDays:entries.reduce((s,e)=>s+e.paidDays,0),unpaidDays:entries.reduce((s,e)=>s+e.unpaidDays,0),policyVersion:policy.POLICY_VERSION}
+  })
   res.json({ leaves })
 }
 
@@ -1685,35 +1648,18 @@ async function createLeave(req, res) {
   }
   if (!data.startDate) return res.status(400).json({ error: 'startDate is required' })
 
+  const policy = await import('./leave-policy.mjs')
+  if (!policy.ELIGIBLE.includes(data.userEmail)) return res.status(400).json({error:'Leave only applies to full-time eligible members'})
   const endDate = data.endDate || data.startDate
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(data.startDate) || endDate < data.startDate) return res.status(400).json({error:'Invalid date range'})
   const halfDay = !!data.halfDay
-  // Overtime falls on off-days, so countWeekdays would yield 0 — it's a
-  // single-day credit (matches the attendance UI), not paid leave.
-  const isOvertime = data.type === 'overtime'
-  const days = halfDay ? 0.5 : isOvertime ? 1 : countWeekdays(data.startDate, endDate)
-
-  let paidDays = isOvertime ? 0 : days
-  let unpaidDays = 0
-
-  if (data.type === 'personal') {
-    const member = TEAM_MEMBERS.find((m) => m.email === data.userEmail)
-    if (member) {
-      const accrued = await accrualForUser(member)
-      const existingSnap = await db.collection('leaves')
-        .where('userEmail', '==', data.userEmail)
-        .where('type', '==', 'personal')
-        .where('status', '==', 'approved')
-        .get()
-      let usedDays = 0
-      existingSnap.docs.forEach((d) => {
-        const l = d.data()
-        usedDays += l.halfDay ? 0.5 : countWeekdays(l.startDate, l.endDate || l.startDate)
-      })
-      const available = Math.max(0, accrued - usedDays)
-      paidDays = Math.min(days, available)
-      unpaidDays = days - paidDays
-    }
-  }
+  const input = await leaveClose.context(data.userEmail)
+  const preview = {...data,id:'__new__',status:'approved',endDate,halfDay,creditApproved:data.creditApproved===true}
+  let entries
+  try { entries=policy.calculate({...input,leaves:[...input.leaves,preview],asOf:endDate}).entries.filter(e=>e.leaveId==='__new__') }
+  catch(err) { return res.status(400).json({error:err.message}) }
+  if(entries.some(e=>e.error)) return res.status(400).json({error:'Contract required for leave dates'})
+  const days=entries.reduce((s,e)=>s+e.days,0), paidDays=entries.reduce((s,e)=>s+e.paidDays,0), unpaidDays=entries.reduce((s,e)=>s+e.unpaidDays,0)
 
   const leave = {
     userEmail: data.userEmail,
@@ -1722,6 +1668,8 @@ async function createLeave(req, res) {
     startDate: data.startDate,
     endDate: endDate,
     halfDay,
+    creditApproved: data.creditApproved === true,
+    policyVersion: policy.POLICY_VERSION,
     days,
     paidDays,
     unpaidDays,
@@ -1754,50 +1702,8 @@ async function cancelLeave(req, res, leaveId) {
 }
 
 async function getLeaveBalances(req, res) {
-  const members = req.query.userEmail
-    ? TEAM_MEMBERS.filter((m) => m.email === req.query.userEmail)
-    : TEAM_MEMBERS
-
-  const snap = await db.collection('leaves').where('status', '==', 'approved').get()
-  const allLeaves = snap.docs.map((d) => d.data())
-  const contractsByEmail = await loadContractsByEmail()
-
-  // Current month string for medical (non-rolling) calculation
-  const now = new Date()
-  const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-
-  const balances = await Promise.all(members.map(async (member) => {
-    const accrued = await accrualForUser(member, contractsByEmail)
-    const memberLeaves = allLeaves.filter((l) => l.userEmail === member.email)
-
-    const personalLeaves = memberLeaves.filter((l) => l.type === 'personal')
-    const medicalLeaves = memberLeaves.filter((l) => l.type === 'medical')
-
-    const personalUsed = personalLeaves.reduce((sum, l) => sum + (l.halfDay ? 0.5 : countWeekdays(l.startDate, l.endDate || l.startDate)), 0)
-
-    // Medical: 1 per month, does NOT roll over — only count current month usage
-    const medicalUsedThisMonth = medicalLeaves
-      .filter((l) => l.startDate.startsWith(currentMonthStr))
-      .reduce((sum, l) => sum + (l.halfDay ? 0.5 : countWeekdays(l.startDate, l.endDate || l.startDate)), 0)
-    const medicalTotalUsed = medicalLeaves.reduce((sum, l) => sum + (l.halfDay ? 0.5 : countWeekdays(l.startDate, l.endDate || l.startDate)), 0)
-
-    return {
-      userEmail: member.email,
-      userName: member.name,
-      joinDate: earliestStart(member, contractsByEmail.get(member.email)),
-      personal: {
-        accrued,
-        used: personalUsed,
-        available: accrued - personalUsed,
-      },
-      medical: {
-        accrued: 1,
-        used: medicalUsedThisMonth,
-        totalUsed: medicalTotalUsed,
-        available: 1 - medicalUsedThisMonth,
-      },
-    }
-  }))
-
-  res.json({ balances })
+  const policy = await import('./leave-policy.mjs')
+  const members=TEAM_MEMBERS.filter(m=>policy.ELIGIBLE.includes(m.email) && (!req.query.userEmail || req.query.userEmail===m.email))
+  const balances=await Promise.all(members.map(async m=>({userEmail:m.email,userName:m.name,engagementRole:'full_time',...policy.calculate(await leaveClose.context(m.email))})))
+  res.json({balances})
 }

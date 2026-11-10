@@ -1,3 +1,4 @@
+import { ELIGIBLE } from '../functions/leave-policy.mjs'
 // Firebase configuration
 // Replace these values with your Firebase project config
 // from: Firebase Console > Project Settings > General > Your apps
@@ -28,14 +29,14 @@ export const googleOAuthClientId = ''
 // Team members. Engagement dates live in the Firestore `contracts`
 // collection — see src/contracts.js and src/utils/contracts.js.
 export const TEAM = [
-  { email: 'gyan@publicknowledge.co', name: 'Gyan', color: '#4f46e5', role: 'admin' },
-  { email: 'charu@publicknowledge.co', name: 'Charu', color: '#0891b2', role: 'admin' },
-  { email: 'sharang@publicknowledge.co', name: 'Sharang', color: '#c026d3', role: 'member' },
+  { email: 'gyan@publicknowledge.co', name: 'Gyan', color: '#4f46e5', role: 'admin', engagementRole: 'not_full_time' },
+  { email: 'charu@publicknowledge.co', name: 'Charu', color: '#0891b2', role: 'admin', engagementRole: 'not_full_time' },
+  { email: 'sharang@publicknowledge.co', name: 'Sharang', color: '#c026d3', role: 'member', engagementRole: 'full_time' },
   // Removed from the tool — restore if he rejoins
   // { email: 'anandu@publicknowledge.co', name: 'Anandu', color: '#ea580c', role: 'member' },
-  { email: 'mohit@publicknowledge.co', name: 'Mohit', color: '#059669', role: 'member' },
-  { email: 'rakesh@publicknowledge.co', name: 'Rakesh', color: '#d97706', role: 'member' },
-  { email: 'devika@publicknowledge.co', name: 'Devika', color: '#e11d48', role: 'member' },
+  { email: 'mohit@publicknowledge.co', name: 'Mohit', color: '#059669', role: 'member', engagementRole: 'full_time' },
+  { email: 'rakesh@publicknowledge.co', name: 'Rakesh', color: '#d97706', role: 'member', engagementRole: 'full_time' },
+  { email: 'devika@publicknowledge.co', name: 'Devika', color: '#e11d48', role: 'member', engagementRole: 'not_full_time' },
   // Only on one project and doesn't use this tool — restore if that changes
   // { email: 'saurabh@publicknowledge.co', name: 'Saurabh', color: '#db2777', role: 'member' },
   // Removed from the tool — restore if she rejoins
@@ -72,5 +73,5 @@ export function isAdmin(email) {
 }
 
 export function getAttendanceTeam() {
-  return TEAM
+  return TEAM.filter(m => ELIGIBLE.includes(m.email) && m.engagementRole === 'full_time')
 }

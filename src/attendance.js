@@ -1,7 +1,9 @@
+import { calculate, isHoliday, workingDays, monthlyStatement, today } from '../functions/leave-policy.mjs'
+import { renderMonthlyClose } from './leave-close.js'
 import { TEAM, ATTENDANCE_STATUSES, isAdmin, getAttendanceTeam } from './config.js'
 import { subscribeToLeaves, createLeave, cancelLeave, subscribeToHolidays, createHoliday, deleteHoliday, subscribeToContracts } from './db.js'
 import { openLeaveModal } from './leave-modal.js'
-import { contractsForUser, earliestContractStart, currentContract, medicalPoolForContract, isWithinContractTerm, contractMonths } from './utils/contracts.js'
+import { contractsForUser, earliestContractStart } from './utils/contracts.js'
 import { toLocalISODate } from './utils/dates.js'
 
 let unsubLeaves = null
@@ -34,7 +36,13 @@ export function renderAttendance(container, ctx) {
     else checkReady()
   })
   unsubHolidays = subscribeToHolidays(ctx.db, (holidays) => {
-    allHolidays = holidays
+    allHolidays = holidays.filter(h => h.studioApproved === true)
+    for (const year of [2025, 2026, 2027, 2028, 2029, 2030]) {
+      for (const [day, name] of [['01-26','Republic Day'],['08-15','Independence Day'],['10-02','Gandhi Jayanti']]) {
+        const date = `${year}-${day}`
+        if (!allHolidays.some(h => h.date === date)) allHolidays.push({ date, name, national: true })
+      }
+    }
     if (ready >= 3) renderContent(container, ctx)
     else checkReady()
   })
@@ -56,7 +64,17 @@ function renderContent(container, ctx) {
   const userEmail = ctx.currentUser.email
   const admin = isAdmin(userEmail)
   const team = getAttendanceTeam()
-  const approvedLeaves = allLeaves.filter((l) => l.status === 'approved')
+  const approvedLeaves = allLeaves.filter(l=>l.status==='approved' && team.some(m=>m.email===l.userEmail))
+  for (const member of team) {
+    const memberLeaves=approvedLeaves.filter(l=>l.userEmail===member.email)
+    const asOf=memberLeaves.reduce((d,l)=>(l.endDate||l.startDate)>d?(l.endDate||l.startDate):d,today())
+    const entries=calculate({userEmail:member.email,contracts:allContracts,leaves:memberLeaves,holidays:allHolidays,asOf}).entries
+    for(const l of memberLeaves) {
+      const own=entries.filter(e=>e.leaveId===l.id)
+      l.calculatedDays=own
+      l.days=own.reduce((s,e)=>s+e.days,0);l.paidDays=own.reduce((s,e)=>s+e.paidDays,0);l.unpaidDays=own.reduce((s,e)=>s+e.unpaidDays,0)
+    }
+  }
 
   container.innerHTML = `
     <div class="attendance-view">
@@ -91,6 +109,7 @@ function renderContent(container, ctx) {
         </div>` : ''}
       </div>
 
+      <div id="monthly-leave-close"></div>
       <div class="attendance-leave-list">
         <h3>Leave History</h3>
         <div id="att-leave-list"></div>
@@ -104,14 +123,14 @@ function renderContent(container, ctx) {
             <div class="policy-item-number">1</div>
             <div class="policy-item-content">
               <strong>Planned Time Off</strong>
-              <p>You can take up to 1 day off per month worked, with advance notice and alignment with project timelines.</p>
+              <p>One personal day is earned after each completed month of service and becomes usable in the next service month. The first month starts at zero.</p>
             </div>
           </div>
           <div class="policy-item">
             <div class="policy-item-number">2</div>
             <div class="policy-item-content">
               <strong>Sick Leave</strong>
-              <p>You can take up to 3 days total for health reasons during your contract. Just inform the team promptly (documentation may be requested if needed).</p>
+              <p>Three medical days are available from the start of each six-month period. Inform the team promptly.</p>
             </div>
           </div>
           <div class="policy-item">
@@ -122,7 +141,7 @@ function renderContent(container, ctx) {
             </div>
           </div>
         </div>
-        <p class="policy-note">Personal leave days roll over if unused. Medical leave days do not roll over. These days off are part of your contract terms only, can't be cashed out, and aren't the same as employee leave or statutory benefits.</p>
+        <p class="policy-note">Unused personal leave carries within the same contract only. All unused leave expires at renewal and is not encashable. Only January 26, August 15 and October 2 are automatic holidays; other holidays require explicit studio approval. Unpaid leave is settled in the monthly payout. These days off are part of your contract terms only, can't be cashed out, and aren't the same as employee leave or statutory benefits.</p>
       </div>
     </div>
   `
@@ -134,6 +153,7 @@ function renderContent(container, ctx) {
     if (y === 2026 && m <= 3) return
     const d = new Date(y, m - 2, 1)
     currentMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    renderMonthlyClose(document.getElementById('monthly-leave-close'), { ...ctx, contracts:allContracts, leaves:approvedLeaves, holidays:allHolidays }, currentMonth)
     renderMonthGrid(team, approvedLeaves)
     renderLeaveList(approvedLeaves, userEmail, admin, ctx)
   })
@@ -141,6 +161,7 @@ function renderContent(container, ctx) {
     const [y, m] = currentMonth.split('-').map(Number)
     const d = new Date(y, m, 1)
     currentMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    renderMonthlyClose(document.getElementById('monthly-leave-close'), { ...ctx, contracts:allContracts, leaves:approvedLeaves, holidays:allHolidays }, currentMonth)
     renderMonthGrid(team, approvedLeaves)
     renderLeaveList(approvedLeaves, userEmail, admin, ctx)
   })
@@ -148,7 +169,7 @@ function renderContent(container, ctx) {
   // Bind request leave buttons
   container.querySelectorAll('[data-action="request-leave"]').forEach((btn) => {
     btn.addEventListener('click', () => {
-      openLeaveModal({ ...ctx, allLeaves: approvedLeaves, allContracts }, {
+      openLeaveModal({ ...ctx, allLeaves: approvedLeaves, allContracts, allHolidays }, {
         onSave: () => {},
         forEmail: btn.dataset.email || userEmail,
       })
@@ -179,7 +200,8 @@ function renderContent(container, ctx) {
     })
   }
 
-  renderMonthGrid(team, approvedLeaves)
+  renderMonthlyClose(document.getElementById('monthly-leave-close'), { ...ctx, contracts:allContracts, leaves:approvedLeaves, holidays:allHolidays }, currentMonth)
+    renderMonthGrid(team, approvedLeaves)
   renderHolidayList(admin, ctx)
   renderLeaveList(approvedLeaves, userEmail, admin, ctx)
 }
@@ -347,7 +369,7 @@ function renderMonthGrid(team, leaves) {
           tooltip = `Half day (${leave.type})`
         } else {
           dotClass = 'att-dot-red'
-          tooltip = leave.type === 'medical' ? 'Medical leave' : (leave.unpaidDays > 0 ? 'Unpaid leave' : 'Personal leave')
+          tooltip = leave.type === 'medical' ? 'Medical leave' : ((leave.calculatedDays?.find(e=>e.date===dateStr)?.unpaidDays || 0) > 0 ? 'Unpaid leave' : 'Personal leave')
         }
       }
 
@@ -399,7 +421,7 @@ function renderHolidayList(admin, ctx) {
       </div>
       <div class="leave-list-right">
         <span class="leave-list-date">${formatDate(h.date)}</span>
-        ${admin ? `<button class="btn-ghost btn-sm leave-cancel-btn" data-holiday-id="${h.id}"><i class="ph ph-x"></i></button>` : ''}
+        ${admin && !h.national ? `<button class="btn-ghost btn-sm leave-cancel-btn" data-holiday-id="${h.id}"><i class="ph ph-x"></i></button>` : ''}
       </div>
     </div>
   `).join('')
@@ -438,7 +460,7 @@ function renderLeaveList(leaves, userEmail, admin, ctx) {
       ? formatDate(l.startDate)
       : `${formatDate(l.startDate)} \u2013 ${formatDate(l.endDate)}`
     const typeLabel = l.type === 'medical' ? 'Medical' : 'Personal'
-    const daysLabel = l.halfDay ? '\u00bd day' : `${l.days || countWeekdays(l.startDate, l.endDate || l.startDate)} day${(l.days || 0) !== 1 ? 's' : ''}`
+    const daysLabel = l.halfDay ? '\u00bd day' : `${l.days ?? workingDays(l.startDate, l.endDate || l.startDate, allHolidays)} day${(l.days || 0) !== 1 ? 's' : ''}`
     const cancelBtn = admin ? `<button class="btn-ghost btn-sm leave-cancel-btn" data-leave-id="${l.id}"><i class="ph ph-x"></i></button>` : ''
 
     return `
@@ -466,63 +488,9 @@ function renderLeaveList(leaves, userEmail, admin, ctx) {
 }
 
 function getBalance(member, type, leaves) {
-  const typeLeaves = leaves.filter((l) => l.userEmail === member.email && l.type === type)
-
-  // Balances are scoped to the person's current contract term: each contract
-  // is self-contained, so a fresh contract starts fresh and leaves taken under
-  // a prior contract (or in a gap between contracts) don't count against it.
-  const memberContracts = contractsForUser(allContracts, member.email)
-  const contract = currentContract(memberContracts)
-  const inTerm = (l) => isWithinContractTerm(l.startDate, contract)
-
-  if (type === 'medical') {
-    // Medical: a fixed pool for the contract term (default 3), does NOT accrue
-    // monthly and does NOT roll over — including across contracts.
-    const pool = medicalPoolForContract(contract)
-    const used = typeLeaves.filter(inTerm).reduce((sum, l) => sum + (l.halfDay ? 0.5 : countWeekdays(l.startDate, l.endDate || l.startDate)), 0)
-
-    return {
-      accrued: pool,
-      used,
-      totalUsed: used,
-      overtimeCredit: 0,
-      unpaid: Math.max(0, used - pool),
-      available: Math.max(0, pool - used),
-    }
-  }
-
-  // Personal: 1 per month, rolls over within the contract term. Accrues from
-  // the current contract only. People with no contract on file accrue 0 —
-  // admin must add a contract on the Contracts page.
-  const accrued = contract ? contractMonths(contract) : 0
-  const used = typeLeaves.filter(inTerm).reduce((sum, l) => sum + (l.halfDay ? 0.5 : countWeekdays(l.startDate, l.endDate || l.startDate)), 0)
-
-  // Overtime credits against personal leave balance (within the same term)
-  const overtimeLeaves = leaves.filter((l) => l.userEmail === member.email && l.type === 'overtime' && inTerm(l))
-  const overtimeCredit = overtimeLeaves.reduce((sum, l) => sum + (l.halfDay ? 0.5 : 1), 0)
-
-  return {
-    accrued,
-    used,
-    totalUsed: used,
-    overtimeCredit,
-    unpaid: Math.max(0, used - accrued - overtimeCredit),
-    available: Math.max(0, accrued - used + overtimeCredit),
-  }
+  return calculate({ userEmail:member.email, contracts:allContracts, leaves, holidays:allHolidays })[type]
 }
 
-function countWeekdays(startDate, endDate) {
-  let count = 0
-  const start = new Date(startDate + 'T00:00:00')
-  const end = new Date(endDate + 'T00:00:00')
-  const current = new Date(start)
-  while (current <= end) {
-    const day = current.getDay()
-    if (day !== 0 && day !== 6) count++
-    current.setDate(current.getDate() + 1)
-  }
-  return count
-}
 
 function formatDate(dateStr) {
   const d = new Date(dateStr + 'T00:00:00')
@@ -586,7 +554,7 @@ function showCellPopover(cell, email, date, existingLeave) {
     if (editBtn) {
       editBtn.addEventListener('click', () => {
         closeCellPopover()
-        openLeaveModal({ ...currentCtx, allLeaves: approvedLeaves, allContracts }, {
+        openLeaveModal({ ...currentCtx, allLeaves: approvedLeaves, allContracts, allHolidays }, {
           onSave: () => {},
           editLeave: existingLeave,
         })
@@ -674,7 +642,7 @@ function showCellPopover(cell, email, date, existingLeave) {
           closeCellPopover()
           const leaveType = status === 'medical_leave' ? 'medical' : 'personal'
           const isHalfDay = status === 'half_day'
-          openLeaveModal({ ...currentCtx, allLeaves: approvedLeaves, allContracts }, {
+          openLeaveModal({ ...currentCtx, allLeaves: approvedLeaves, allContracts, allHolidays }, {
             onSave: () => {},
             forEmail: email,
             date,
