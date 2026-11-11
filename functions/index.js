@@ -989,10 +989,10 @@ exports.onTaskWritten = onDocumentWritten(
       notifyOpenClaw(event.params.taskId, { ...task, projectName, event: 'task_completed' }, 'completed')
 
       // Post to client's Slack channel via Asty bot token (project channel overrides client channel).
-      // Skipped when the change came from a PK Work digest button: that click
-      // already rewrites the digest message in place, and two notifications for
-      // one click is noise.
-      if (task.clientId && !pkworkSlack.isFreshSlackWrite(task)) {
+      // Posted for digest-button clicks too: the click only strikes the line
+      // through in the digest, and the channel should keep its own record of
+      // what got done.
+      if (task.clientId) {
         const clientDoc = await db.collection('clients').doc(task.clientId).get()
         const client = clientDoc.exists ? clientDoc.data() : null
         const channelId = project?.slackChannelId || client?.slackChannelId
